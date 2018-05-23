@@ -2,6 +2,13 @@
 name = "aprs-parser"
 version = "0.1.0"
 authors = ["Tobias Bieniek <tobias.bieniek@gmail.com>"]
+description = "APRS message parser for Rust"
+readme = "README.md"
+keywords = ["aprs", "parser", "ogn"]
+homepage = "https://github.com/Turbo87/aprs-parser-rs/"
+repository = "https://github.com/Turbo87/aprs-parser-rs.git"
+license = "MIT/Apache-2.0"
+exclude = [".gitignore", ".travis.yml"]
 
 [dependencies]
 failure = "0.1.1"
