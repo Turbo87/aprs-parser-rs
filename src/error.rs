@@ -6,6 +6,10 @@ pub enum APRSError {
     EmptySSID(String),
     #[fail(display = "Invalid Timestamp: {}", _0)]
     InvalidTimestamp(String),
+    #[fail(display = "Unsupported Position Format: {}", _0)]
+    UnsupportedPositionFormat(String),
+    #[fail(display = "Invalid Position: {}", _0)]
+    InvalidPosition(String),
     #[fail(display = "Invalid Latitude: {}", _0)]
     InvalidLatitude(String),
     #[fail(display = "Invalid Longitude: {}", _0)]
