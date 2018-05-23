@@ -2,6 +2,8 @@
 aprs-parser
 ==============================================================================
 
+[![Build Status](https://travis-ci.org/Turbo87/aprs-parser-rs.svg?branch=master)](https://travis-ci.org/Turbo87/aprs-parser-rs)
+
 [APRS] message parser for [Rust]
 
 [APRS]: http://www.aprs.org/
