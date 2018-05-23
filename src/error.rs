@@ -14,4 +14,6 @@ pub enum APRSError {
     InvalidLatitude(String),
     #[fail(display = "Invalid Longitude: {}", _0)]
     InvalidLongitude(String),
+    #[fail(display = "Invalid Message: {}", _0)]
+    InvalidMessage(String),
 }

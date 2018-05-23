@@ -6,10 +6,12 @@ extern crate failure;
 mod error;
 mod callsign;
 mod lonlat;
+mod message;
 mod position;
 mod timestamp;
 
 pub use error::APRSError;
 pub use callsign::Callsign;
+pub use message::APRSMessage;
 pub use position::APRSPosition;
 pub use timestamp::Timestamp;
