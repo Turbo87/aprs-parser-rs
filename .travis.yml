@@ -1,0 +1,11 @@
+language: rust
+rust:
+  - 1.24.0
+  - stable
+  - beta
+  - nightly
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - rust: nightly
