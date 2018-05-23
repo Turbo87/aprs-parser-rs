@@ -4,4 +4,6 @@ pub enum APRSError {
     EmptyCallsign(String),
     #[fail(display = "Empty Callsign SSID: {}", _0)]
     EmptySSID(String),
+    #[fail(display = "Invalid Timestamp: {}", _0)]
+    InvalidTimestamp(String),
 }

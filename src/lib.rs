@@ -3,6 +3,8 @@ extern crate failure;
 
 mod error;
 mod callsign;
+mod timestamp;
 
 pub use error::APRSError;
 pub use callsign::Callsign;
+pub use timestamp::Timestamp;
