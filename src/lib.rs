@@ -71,7 +71,7 @@ use std::str::FromStr;
 
 pub use callsign::Callsign;
 pub use error::AprsError;
-pub use message::{APRSData, APRSMessage};
+pub use message::{APRSMessage, AprsData};
 pub use position::AprsPosition;
 pub use timestamp::Timestamp;
 

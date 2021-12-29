@@ -9,7 +9,7 @@ pub struct APRSMessage {
     pub from: Callsign,
     pub to: Callsign,
     pub via: Vec<Callsign>,
-    pub data: APRSData,
+    pub data: AprsData,
 }
 
 impl FromStr for APRSMessage {
@@ -42,8 +42,8 @@ impl FromStr for APRSMessage {
         }
 
         let data = AprsPosition::from_str(body)
-            .map(APRSData::Position)
-            .unwrap_or(APRSData::Unknown);
+            .map(AprsData::Position)
+            .unwrap_or(AprsData::Unknown);
 
         Ok(APRSMessage {
             from,
@@ -55,7 +55,7 @@ impl FromStr for APRSMessage {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum APRSData {
+pub enum AprsData {
     Position(AprsPosition),
     Unknown,
 }
@@ -76,7 +76,7 @@ mod tests {
         );
 
         match result.data {
-            APRSData::Position(position) => {
+            AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
                 assert_relative_eq!(position.latitude, 48.360166);
                 assert_relative_eq!(position.longitude, 12.408166);
