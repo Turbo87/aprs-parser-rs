@@ -5,14 +5,14 @@ use AprsPosition;
 use Callsign;
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct APRSMessage {
+pub struct AprsMessage {
     pub from: Callsign,
     pub to: Callsign,
     pub via: Vec<Callsign>,
     pub data: AprsData,
 }
 
-impl FromStr for APRSMessage {
+impl FromStr for AprsMessage {
     type Err = AprsError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
@@ -45,7 +45,7 @@ impl FromStr for APRSMessage {
             .map(AprsData::Position)
             .unwrap_or(AprsData::Unknown);
 
-        Ok(APRSMessage {
+        Ok(AprsMessage {
             from,
             to,
             via,
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn parse() {
-        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<APRSMessage>().unwrap();
+        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<AprsMessage>().unwrap();
         assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
         assert_eq!(result.to, Callsign::new("APRS", None));
         assert_eq!(
