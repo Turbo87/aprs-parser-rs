@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use APRSPosition;
 use AprsError;
+use AprsPosition;
 use Callsign;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -41,7 +41,7 @@ impl FromStr for APRSMessage {
             via.push(Callsign::from_str(v)?);
         }
 
-        let data = APRSPosition::from_str(body)
+        let data = AprsPosition::from_str(body)
             .map(APRSData::Position)
             .unwrap_or(APRSData::Unknown);
 
@@ -56,7 +56,7 @@ impl FromStr for APRSMessage {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum APRSData {
-    Position(APRSPosition),
+    Position(AprsPosition),
     Unknown,
 }
 

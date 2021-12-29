@@ -36,7 +36,7 @@
 //!     //             }
 //!     //         ],
 //!     //         data: Position(
-//!     //             APRSPosition {
+//!     //             AprsPosition {
 //!     //                 timestamp: Some(
 //!     //                     HHMMSS(
 //!     //                         7,
@@ -72,7 +72,7 @@ use std::str::FromStr;
 pub use callsign::Callsign;
 pub use error::AprsError;
 pub use message::{APRSData, APRSMessage};
-pub use position::APRSPosition;
+pub use position::AprsPosition;
 pub use timestamp::Timestamp;
 
 pub fn parse(s: &str) -> Result<APRSMessage, AprsError> {
