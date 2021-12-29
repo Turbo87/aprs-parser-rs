@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use AprsError;
+use AprsMessage;
 use AprsPosition;
 use Callsign;
 
@@ -41,9 +42,7 @@ impl FromStr for AprsPacket {
             via.push(Callsign::from_str(v)?);
         }
 
-        let data = AprsPosition::from_str(body)
-            .map(AprsData::Position)
-            .unwrap_or(AprsData::Unknown);
+        let data = AprsData::from_str(body)?;
 
         Ok(AprsPacket {
             from,
@@ -57,7 +56,20 @@ impl FromStr for AprsPacket {
 #[derive(PartialEq, Debug, Clone)]
 pub enum AprsData {
     Position(AprsPosition),
+    Message(AprsMessage),
     Unknown,
+}
+
+impl FromStr for AprsData {
+    type Err = AprsError;
+
+    fn from_str(s: &str) -> Result<Self, AprsError> {
+        Ok(match s.chars().next().unwrap_or(0 as char) {
+            ':' => AprsData::Message(AprsMessage::from_str(&s[1..])?),
+            '!' | '/' | '=' | '@' => AprsData::Position(AprsPosition::from_str(s)?),
+            _ => AprsData::Unknown,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -87,5 +99,53 @@ mod tests {
             }
             _ => panic!("Unexpected data type"),
         }
+    }
+
+    #[test]
+    fn parse_message() {
+        let result =
+            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {32975"
+                .parse::<AprsPacket>()
+                .unwrap();
+        assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
+        assert_eq!(result.to, Callsign::new("Aprs", None));
+        assert_eq!(
+            result.via,
+            vec![Callsign::new("qAS", None), Callsign::new("dl4mea", None),]
+        );
+
+        match result.data {
+            AprsData::Message(msg) => {
+                assert_eq!(msg.addressee, "DEST");
+                assert_eq!(msg.text, "Hello World! This msg has a : colon ");
+                assert_eq!(msg.id, Some(32975));
+            }
+            _ => panic!("Unexpected data type"),
+        }
+    }
+
+    #[test]
+    fn parse_message_invalid_dest() {
+        // Dest must be padded with spaces to 9 characters long
+        let result =
+            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST  :Hello World! This msg has a : colon {32975"
+                .parse::<AprsPacket>();
+
+        assert_eq!(
+            result,
+            Err(AprsError::InvalidMessageDestination("DEST  ".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_message_invalid_id() {
+        let result =
+            r"ICA3D17F2>Aprs,qAS,dl4mea::DESTINATI:Hello World! This msg has a : colon {329754"
+                .parse::<AprsPacket>();
+
+        assert_eq!(
+            result,
+            Err(AprsError::InvalidMessageId("329754".to_string()))
+        );
     }
 }

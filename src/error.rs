@@ -16,4 +16,8 @@ pub enum AprsError {
     InvalidLongitude(String),
     #[error("Invalid Packet: {0}")]
     InvalidPacket(String),
+    #[error("Invalid Message Destination: {0}")]
+    InvalidMessageDestination(String),
+    #[error("Invalid Message ID: {0}")]
+    InvalidMessageId(String),
 }
