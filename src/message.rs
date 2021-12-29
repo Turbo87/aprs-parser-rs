@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use APRSError;
 use APRSPosition;
+use AprsError;
 use Callsign;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -13,18 +13,18 @@ pub struct APRSMessage {
 }
 
 impl FromStr for APRSMessage {
-    type Err = APRSError;
+    type Err = AprsError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         let header_delimiter = s
             .find(':')
-            .ok_or_else(|| APRSError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
         let (header, rest) = s.split_at(header_delimiter);
         let body = &rest[1..];
 
         let from_delimiter = header
             .find('>')
-            .ok_or_else(|| APRSError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
         let (from, rest) = header.split_at(from_delimiter);
         let from = Callsign::from_str(from)?;
 
@@ -33,7 +33,7 @@ impl FromStr for APRSMessage {
 
         let to = to_and_via
             .first()
-            .ok_or_else(|| APRSError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
         let to = Callsign::from_str(to)?;
 
         let mut via = vec![];

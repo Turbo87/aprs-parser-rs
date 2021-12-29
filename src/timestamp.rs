@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use APRSError;
+use AprsError;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum Timestamp {
@@ -13,30 +13,30 @@ pub enum Timestamp {
 }
 
 impl FromStr for Timestamp {
-    type Err = APRSError;
+    type Err = AprsError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         let b = s.as_bytes();
 
         if b.len() != 7 {
-            return Err(APRSError::InvalidTimestamp(s.to_owned()));
+            return Err(AprsError::InvalidTimestamp(s.to_owned()));
         }
 
         let one = s[0..2]
             .parse::<u8>()
-            .map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
+            .map_err(|_| AprsError::InvalidTimestamp(s.to_owned()))?;
         let two = s[2..4]
             .parse::<u8>()
-            .map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
+            .map_err(|_| AprsError::InvalidTimestamp(s.to_owned()))?;
         let three = s[4..6]
             .parse::<u8>()
-            .map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
+            .map_err(|_| AprsError::InvalidTimestamp(s.to_owned()))?;
 
         Ok(match b[6] as char {
             'z' => Timestamp::DDHHMM(one, two, three),
             'h' => Timestamp::HHMMSS(one, two, three),
             '/' => Timestamp::Unsupported(s.to_owned()),
-            _ => return Err(APRSError::InvalidTimestamp(s.to_owned())),
+            _ => return Err(AprsError::InvalidTimestamp(s.to_owned())),
         })
     }
 }
@@ -67,7 +67,7 @@ mod tests {
     fn invalid_timestamp() {
         assert_eq!(
             "1234567".parse::<Timestamp>(),
-            Err(APRSError::InvalidTimestamp("1234567".to_owned()))
+            Err(AprsError::InvalidTimestamp("1234567".to_owned()))
         );
     }
 
@@ -75,7 +75,7 @@ mod tests {
     fn invalid_timestamp2() {
         assert_eq!(
             "123a56z".parse::<Timestamp>(),
-            Err(APRSError::InvalidTimestamp("123a56z".to_owned()))
+            Err(AprsError::InvalidTimestamp("123a56z".to_owned()))
         );
     }
 }

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use lonlat::{parse_latitude, parse_longitude};
-use APRSError;
+use AprsError;
 use Timestamp;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct APRSPosition {
 }
 
 impl FromStr for APRSPosition {
-    type Err = APRSError;
+    type Err = AprsError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         // parse timestamp if necessary
@@ -34,11 +34,11 @@ impl FromStr for APRSPosition {
         // check for compressed position format
         let is_uncompressed_position = s.chars().take(1).all(|c| c.is_numeric());
         if !is_uncompressed_position {
-            return Err(APRSError::UnsupportedPositionFormat(s.to_owned()));
+            return Err(AprsError::UnsupportedPositionFormat(s.to_owned()));
         }
 
         if s.len() < 19 {
-            return Err(APRSError::InvalidPosition(s.to_owned()));
+            return Err(AprsError::InvalidPosition(s.to_owned()));
         }
 
         // parse position
