@@ -16,7 +16,7 @@
 //!     println!("{:#?}", result);
 //!
 //!     // Ok(
-//!     //     AprsMessage {
+//!     //     AprsPacket {
 //!     //         from: Callsign {
 //!     //             call: "ICA3D17F2",
 //!     //             ssid: None
@@ -66,7 +66,7 @@ extern crate approx;
 mod callsign;
 mod error;
 mod lonlat;
-mod message;
+mod packet;
 mod position;
 mod timestamp;
 
@@ -75,10 +75,10 @@ use std::str::FromStr;
 pub use callsign::Callsign;
 pub use error::AprsError;
 pub use lonlat::{Latitude, Longitude};
-pub use message::{AprsData, AprsMessage};
+pub use packet::{AprsData, AprsPacket};
 pub use position::AprsPosition;
 pub use timestamp::Timestamp;
 
-pub fn parse(s: &str) -> Result<AprsMessage, AprsError> {
-    AprsMessage::from_str(s)
+pub fn parse(s: &str) -> Result<AprsPacket, AprsError> {
+    AprsPacket::from_str(s)
 }

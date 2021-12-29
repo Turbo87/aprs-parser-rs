@@ -5,26 +5,26 @@ use AprsPosition;
 use Callsign;
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct AprsMessage {
+pub struct AprsPacket {
     pub from: Callsign,
     pub to: Callsign,
     pub via: Vec<Callsign>,
     pub data: AprsData,
 }
 
-impl FromStr for AprsMessage {
+impl FromStr for AprsPacket {
     type Err = AprsError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         let header_delimiter = s
             .find(':')
-            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
         let (header, rest) = s.split_at(header_delimiter);
         let body = &rest[1..];
 
         let from_delimiter = header
             .find('>')
-            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
         let (from, rest) = header.split_at(from_delimiter);
         let from = Callsign::from_str(from)?;
 
@@ -33,7 +33,7 @@ impl FromStr for AprsMessage {
 
         let to = to_and_via
             .first()
-            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
         let to = Callsign::from_str(to)?;
 
         let mut via = vec![];
@@ -45,7 +45,7 @@ impl FromStr for AprsMessage {
             .map(AprsData::Position)
             .unwrap_or(AprsData::Unknown);
 
-        Ok(AprsMessage {
+        Ok(AprsPacket {
             from,
             to,
             via,
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn parse() {
-        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<AprsMessage>().unwrap();
+        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<AprsPacket>().unwrap();
         assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
         assert_eq!(result.to, Callsign::new("APRS", None));
         assert_eq!(

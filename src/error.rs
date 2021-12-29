@@ -14,6 +14,6 @@ pub enum AprsError {
     InvalidLatitude(String),
     #[error("Invalid Longitude: {0}")]
     InvalidLongitude(String),
-    #[error("Invalid Message: {0}")]
-    InvalidMessage(String),
+    #[error("Invalid Packet: {0}")]
+    InvalidPacket(String),
 }
