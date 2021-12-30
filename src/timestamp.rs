@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use AprsError;
@@ -38,6 +39,16 @@ impl FromStr for Timestamp {
             '/' => Timestamp::Unsupported(s.to_owned()),
             _ => return Err(AprsError::InvalidTimestamp(s.to_owned())),
         })
+    }
+}
+
+impl Display for Timestamp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::DDHHMM(d, h, m) => write!(f, "{:02}{:02}{:02}z", d, h, m),
+            Self::HHMMSS(h, m, s) => write!(f, "{:02}{:02}{:02}h", h, m, s),
+            Self::Unsupported(s) => write!(f, "{}", s),
+        }
     }
 }
 

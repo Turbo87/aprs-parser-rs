@@ -1,6 +1,7 @@
 use std::ops::Deref;
 use std::str::FromStr;
 use AprsError;
+use EncodeError;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default)]
 pub struct Latitude(f32);
@@ -98,6 +99,38 @@ impl FromStr for Longitude {
     }
 }
 
+pub fn encode_latitude(lat: Latitude) -> Result<String, EncodeError> {
+    let lat = lat.0;
+
+    if !(-90.0..=90.0).contains(&lat) {
+        return Err(EncodeError::InvalidLatitude(lat));
+    }
+
+    let (dir, lat) = if lat >= 0.0 { ('N', lat) } else { ('S', -lat) };
+
+    let deg = lat as u32;
+    let min = ((lat - (deg as f32)) * 60.0) as u32;
+    let min_frac = ((lat - (deg as f32) - (min as f32 / 60.0)) * 6000.0).round() as u32;
+
+    Ok(format!("{:02}{:02}.{:02}{}", deg, min, min_frac, dir))
+}
+
+pub fn encode_longitude(lon: Longitude) -> Result<String, EncodeError> {
+    let lon = lon.0;
+
+    if !(-180.0..=180.0).contains(&lon) {
+        return Err(EncodeError::InvalidLongitude(lon));
+    }
+
+    let (dir, lon) = if lon >= 0.0 { ('E', lon) } else { ('W', -lon) };
+
+    let deg = lon as u32;
+    let min = ((lon - (deg as f32)) * 60.0) as u32;
+    let min_frac = ((lon - (deg as f32) - (min as f32 / 60.0)) * 6000.0).round() as u32;
+
+    Ok(format!("{:03}{:02}.{:02}{}", deg, min, min_frac, dir))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +173,50 @@ mod tests {
         );
         assert_relative_eq!(*"00000.00E".parse::<Longitude>().unwrap(), 0.0);
         assert_relative_eq!(*"00000.00W".parse::<Longitude>().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn test_encode_latitude() {
+        assert_eq!(
+            encode_latitude(Latitude(49.05833)),
+            Ok("4903.50N".to_string())
+        );
+        assert_eq!(
+            encode_latitude(Latitude(-49.05833)),
+            Ok("4903.50S".to_string())
+        );
+        assert_eq!(
+            encode_latitude(Latitude(-90.1)),
+            Err(EncodeError::InvalidLatitude(-90.1))
+        );
+        assert_eq!(
+            encode_latitude(Latitude(90.1)),
+            Err(EncodeError::InvalidLatitude(90.1))
+        );
+        assert_eq!(encode_latitude(Latitude(0.0)), Ok("0000.00N".to_string()));
+    }
+
+    #[test]
+    fn test_encode_longitude() {
+        assert_eq!(
+            encode_longitude(Longitude(129.05833)),
+            Ok("12903.50E".to_string())
+        );
+        assert_eq!(
+            encode_longitude(Longitude(-49.05833)),
+            Ok("04903.50W".to_string())
+        );
+        assert_eq!(
+            encode_longitude(Longitude(-180.1)),
+            Err(EncodeError::InvalidLongitude(-180.1))
+        );
+        assert_eq!(
+            encode_longitude(Longitude(180.1)),
+            Err(EncodeError::InvalidLongitude(180.1))
+        );
+        assert_eq!(
+            encode_longitude(Longitude(0.0)),
+            Ok("00000.00E".to_string())
+        );
     }
 }

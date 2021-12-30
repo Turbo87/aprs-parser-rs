@@ -1,7 +1,9 @@
+use std::fmt::Write;
 use std::str::FromStr;
 
-use lonlat::{Latitude, Longitude};
+use lonlat::{encode_latitude, encode_longitude, Latitude, Longitude};
 use AprsError;
+use EncodeError;
 use Timestamp;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -64,6 +66,35 @@ impl FromStr for AprsPosition {
             symbol_code,
             comment: comment.to_owned(),
         })
+    }
+}
+
+impl AprsPosition {
+    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        let sym = match (self.timestamp.is_some(), self.messaging_supported) {
+            (true, true) => '@',
+            (true, false) => '/',
+            (false, true) => '=',
+            (false, false) => '!',
+        };
+
+        write!(buf, "{}", sym)?;
+
+        if let Some(ts) = &self.timestamp {
+            write!(buf, "{}", ts)?;
+        }
+
+        write!(
+            buf,
+            "{}{}{}{}{}",
+            encode_latitude(self.latitude)?,
+            self.symbol_table,
+            encode_longitude(self.longitude)?,
+            self.symbol_code,
+            self.comment,
+        )?;
+
+        Ok(())
     }
 }
 

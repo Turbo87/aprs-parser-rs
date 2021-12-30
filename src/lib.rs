@@ -74,7 +74,7 @@ mod timestamp;
 use std::str::FromStr;
 
 pub use callsign::Callsign;
-pub use error::AprsError;
+pub use error::{AprsError, EncodeError};
 pub use lonlat::{Latitude, Longitude};
 pub use message::AprsMessage;
 pub use packet::{AprsData, AprsPacket};
