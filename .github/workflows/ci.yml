@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         rust:
-          - 1.42.0  # minimum supported version
+          - 1.38.0  # minimum supported version
           - stable
 
     steps:
