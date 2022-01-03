@@ -14,4 +14,4 @@ exclude = [".gitignore", ".travis.yml"]
 thiserror = "1.0.30"
 
 [dev-dependencies]
-approx = "0.3.0"
+approx = "0.3.2"
