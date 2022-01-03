@@ -58,11 +58,17 @@ mod tests {
 
     #[test]
     fn empty_callsign() {
-        assert_eq!("-42".parse::<Callsign>(), Err(APRSError::EmptyCallsign("-42".to_owned())));
+        assert_eq!(
+            "-42".parse::<Callsign>(),
+            Err(APRSError::EmptyCallsign("-42".to_owned()))
+        );
     }
 
     #[test]
     fn empty_ssid() {
-        assert_eq!("ABCDEF-".parse::<Callsign>(), Err(APRSError::EmptySSID("ABCDEF-".to_owned())));
+        assert_eq!(
+            "ABCDEF-".parse::<Callsign>(),
+            Err(APRSError::EmptySSID("ABCDEF-".to_owned()))
+        );
     }
 }

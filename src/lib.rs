@@ -55,12 +55,15 @@
 //! ```
 
 extern crate failure;
-#[macro_use] extern crate failure_derive;
+#[macro_use]
+extern crate failure_derive;
 
-#[cfg(test)] #[macro_use] extern crate approx;
+#[cfg(test)]
+#[macro_use]
+extern crate approx;
 
-mod error;
 mod callsign;
+mod error;
 mod lonlat;
 mod message;
 mod position;
@@ -68,9 +71,9 @@ mod timestamp;
 
 use std::str::FromStr;
 
-pub use error::APRSError;
 pub use callsign::Callsign;
-pub use message::{APRSMessage, APRSData};
+pub use error::APRSError;
+pub use message::{APRSData, APRSMessage};
 pub use position::APRSPosition;
 pub use timestamp::Timestamp;
 

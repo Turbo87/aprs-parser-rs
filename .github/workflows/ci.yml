@@ -23,3 +23,12 @@ jobs:
       - run: rustup update ${{ matrix.rust }}
       - run: rustup default ${{ matrix.rust }}
       - run: cargo test
+
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup default 1.57.0
+      - run: rustup component add rustfmt
+      - run: cargo fmt -- --check

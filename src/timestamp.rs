@@ -22,9 +22,15 @@ impl FromStr for Timestamp {
             return Err(APRSError::InvalidTimestamp(s.to_owned()));
         }
 
-        let one = s[0..2].parse::<u8>().map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
-        let two = s[2..4].parse::<u8>().map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
-        let three = s[4..6].parse::<u8>().map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
+        let one = s[0..2]
+            .parse::<u8>()
+            .map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
+        let two = s[2..4]
+            .parse::<u8>()
+            .map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
+        let three = s[4..6]
+            .parse::<u8>()
+            .map_err(|_| APRSError::InvalidTimestamp(s.to_owned()))?;
 
         Ok(match b[6] as char {
             'z' => Timestamp::DDHHMM(one, two, three),
@@ -51,16 +57,25 @@ mod tests {
 
     #[test]
     fn parse_local_time() {
-        assert_eq!("123456/".parse::<Timestamp>(), Ok(Timestamp::Unsupported("123456/".to_owned())));
+        assert_eq!(
+            "123456/".parse::<Timestamp>(),
+            Ok(Timestamp::Unsupported("123456/".to_owned()))
+        );
     }
 
     #[test]
     fn invalid_timestamp() {
-        assert_eq!("1234567".parse::<Timestamp>(), Err(APRSError::InvalidTimestamp("1234567".to_owned())));
+        assert_eq!(
+            "1234567".parse::<Timestamp>(),
+            Err(APRSError::InvalidTimestamp("1234567".to_owned()))
+        );
     }
 
     #[test]
     fn invalid_timestamp2() {
-        assert_eq!("123a56z".parse::<Timestamp>(), Err(APRSError::InvalidTimestamp("123a56z".to_owned())));
+        assert_eq!(
+            "123a56z".parse::<Timestamp>(),
+            Err(APRSError::InvalidTimestamp("123a56z".to_owned()))
+        );
     }
 }
