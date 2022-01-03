@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use lonlat::{parse_latitude, parse_longitude, Latitude, Longitude};
+use lonlat::{Latitude, Longitude};
 use AprsError;
 use Timestamp;
 
@@ -42,8 +42,8 @@ impl FromStr for AprsPosition {
         }
 
         // parse position
-        let latitude = parse_latitude(&s[0..8])?;
-        let longitude = parse_longitude(&s[9..18])?;
+        let latitude = s[0..8].parse()?;
+        let longitude = s[9..18].parse()?;
 
         let comment = &s[19..s.len()];
 
