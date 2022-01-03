@@ -114,6 +114,10 @@ mod tests {
             "4903.50E".parse::<Latitude>(),
             Err(AprsError::InvalidLatitude("4903.50E".to_owned()))
         );
+        assert_eq!(
+            "9903.50N".parse::<Latitude>(),
+            Err(AprsError::InvalidLatitude("9903.50N".to_owned()))
+        );
         assert_relative_eq!(*"0000.00N".parse::<Latitude>().unwrap(), 0.0);
         assert_relative_eq!(*"0000.00S".parse::<Latitude>().unwrap(), 0.0);
     }
@@ -129,6 +133,10 @@ mod tests {
         assert_eq!(
             "04903.50S".parse::<Longitude>(),
             Err(AprsError::InvalidLongitude("04903.50S".to_owned()))
+        );
+        assert_eq!(
+            "18903.50E".parse::<Longitude>(),
+            Err(AprsError::InvalidLongitude("18903.50E".to_owned()))
         );
         assert_relative_eq!(*"00000.00E".parse::<Longitude>().unwrap(), 0.0);
         assert_relative_eq!(*"00000.00W".parse::<Longitude>().unwrap(), 0.0);
