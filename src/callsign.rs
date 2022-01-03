@@ -21,7 +21,7 @@ impl FromStr for Callsign {
     type Err = APRSError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let delimiter = s.find("-"); //.ok_or_else(|| APRSError::EmptyCallsign(s.to_owned()))?;
+        let delimiter = s.find('-'); //.ok_or_else(|| APRSError::EmptyCallsign(s.to_owned()))?;
         if delimiter.is_none() {
             return Ok(Callsign::new(s, None));
         }
