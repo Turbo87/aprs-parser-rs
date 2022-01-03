@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
-use lonlat::{parse_latitude, parse_longitude};
+use lonlat::{parse_latitude, parse_longitude, Latitude, Longitude};
 use AprsError;
 use Timestamp;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPosition {
     pub timestamp: Option<Timestamp>,
-    pub latitude: f32,
-    pub longitude: f32,
+    pub latitude: Latitude,
+    pub longitude: Longitude,
     pub comment: String,
 }
 
@@ -64,8 +64,8 @@ mod tests {
     fn parse() {
         let result = r"!4903.50N/07201.75W-".parse::<AprsPosition>().unwrap();
         assert_eq!(result.timestamp, None);
-        assert_relative_eq!(result.latitude, 49.05833);
-        assert_relative_eq!(result.longitude, -72.02916);
+        assert_relative_eq!(*result.latitude, 49.05833);
+        assert_relative_eq!(*result.longitude, -72.02916);
         assert_eq!(result.comment, "");
     }
 
@@ -75,8 +75,8 @@ mod tests {
             .parse::<AprsPosition>()
             .unwrap();
         assert_eq!(result.timestamp, None);
-        assert_relative_eq!(result.latitude, 49.05833);
-        assert_relative_eq!(result.longitude, -72.02916);
+        assert_relative_eq!(*result.latitude, 49.05833);
+        assert_relative_eq!(*result.longitude, -72.02916);
         assert_eq!(result.comment, "Hello/A=001000");
     }
 
@@ -86,8 +86,8 @@ mod tests {
             .parse::<AprsPosition>()
             .unwrap();
         assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-        assert_relative_eq!(result.latitude, 48.360166);
-        assert_relative_eq!(result.longitude, 12.408166);
+        assert_relative_eq!(*result.latitude, 48.360166);
+        assert_relative_eq!(*result.longitude, 12.408166);
         assert_eq!(result.comment, "322/103/A=003054");
     }
 }
