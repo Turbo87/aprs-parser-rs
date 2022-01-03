@@ -1,30 +1,30 @@
 use std::str::FromStr;
 
-use APRSError;
-use APRSPosition;
+use AprsError;
+use AprsPosition;
 use Callsign;
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct APRSMessage {
+pub struct AprsMessage {
     pub from: Callsign,
     pub to: Callsign,
     pub via: Vec<Callsign>,
-    pub data: APRSData,
+    pub data: AprsData,
 }
 
-impl FromStr for APRSMessage {
-    type Err = APRSError;
+impl FromStr for AprsMessage {
+    type Err = AprsError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         let header_delimiter = s
             .find(':')
-            .ok_or_else(|| APRSError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
         let (header, rest) = s.split_at(header_delimiter);
         let body = &rest[1..];
 
         let from_delimiter = header
             .find('>')
-            .ok_or_else(|| APRSError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
         let (from, rest) = header.split_at(from_delimiter);
         let from = Callsign::from_str(from)?;
 
@@ -33,7 +33,7 @@ impl FromStr for APRSMessage {
 
         let to = to_and_via
             .first()
-            .ok_or_else(|| APRSError::InvalidMessage(s.to_owned()))?;
+            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
         let to = Callsign::from_str(to)?;
 
         let mut via = vec![];
@@ -41,11 +41,11 @@ impl FromStr for APRSMessage {
             via.push(Callsign::from_str(v)?);
         }
 
-        let data = APRSPosition::from_str(body)
-            .map(APRSData::Position)
-            .unwrap_or(APRSData::Unknown);
+        let data = AprsPosition::from_str(body)
+            .map(AprsData::Position)
+            .unwrap_or(AprsData::Unknown);
 
-        Ok(APRSMessage {
+        Ok(AprsMessage {
             from,
             to,
             via,
@@ -55,8 +55,8 @@ impl FromStr for APRSMessage {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum APRSData {
-    Position(APRSPosition),
+pub enum AprsData {
+    Position(AprsPosition),
     Unknown,
 }
 
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn parse() {
-        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<APRSMessage>().unwrap();
+        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<AprsMessage>().unwrap();
         assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
         assert_eq!(result.to, Callsign::new("APRS", None));
         assert_eq!(
@@ -76,7 +76,7 @@ mod tests {
         );
 
         match result.data {
-            APRSData::Position(position) => {
+            AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
                 assert_relative_eq!(position.latitude, 48.360166);
                 assert_relative_eq!(position.longitude, 12.408166);

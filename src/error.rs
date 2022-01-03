@@ -1,5 +1,5 @@
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum APRSError {
+pub enum AprsError {
     #[error("Empty Callsign: {0}")]
     EmptyCallsign(String),
     #[error("Empty Callsign SSID: {0}")]

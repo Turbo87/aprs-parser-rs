@@ -16,7 +16,7 @@
 //!     println!("{:#?}", result);
 //!
 //!     // Ok(
-//!     //     APRSMessage {
+//!     //     AprsMessage {
 //!     //         from: Callsign {
 //!     //             call: "ICA3D17F2",
 //!     //             ssid: None
@@ -36,7 +36,7 @@
 //!     //             }
 //!     //         ],
 //!     //         data: Position(
-//!     //             APRSPosition {
+//!     //             AprsPosition {
 //!     //                 timestamp: Some(
 //!     //                     HHMMSS(
 //!     //                         7,
@@ -70,11 +70,11 @@ mod timestamp;
 use std::str::FromStr;
 
 pub use callsign::Callsign;
-pub use error::APRSError;
-pub use message::{APRSData, APRSMessage};
-pub use position::APRSPosition;
+pub use error::AprsError;
+pub use message::{AprsData, AprsMessage};
+pub use position::AprsPosition;
 pub use timestamp::Timestamp;
 
-pub fn parse(s: &str) -> Result<APRSMessage, APRSError> {
-    APRSMessage::from_str(s)
+pub fn parse(s: &str) -> Result<AprsMessage, AprsError> {
+    AprsMessage::from_str(s)
 }
