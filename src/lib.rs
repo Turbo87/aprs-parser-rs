@@ -54,9 +54,7 @@
 //! }
 //! ```
 
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
+extern crate thiserror;
 
 #[cfg(test)]
 #[macro_use]

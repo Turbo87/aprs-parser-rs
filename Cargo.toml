@@ -11,8 +11,7 @@ license = "MIT/Apache-2.0"
 exclude = [".gitignore", ".travis.yml"]
 
 [dependencies]
-failure = "0.1.1"
-failure_derive = "0.1.1"
+thiserror = "1.0.30"
 
 [dev-dependencies]
 approx = "0.3.0"
