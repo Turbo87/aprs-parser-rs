@@ -15,10 +15,8 @@ jobs:
       fail-fast: false
       matrix:
         rust:
-          - 1.42.0
+          - 1.42.0  # minimum supported version
           - stable
-          - beta
-          - nightly
 
     steps:
       - uses: actions/checkout@v2
