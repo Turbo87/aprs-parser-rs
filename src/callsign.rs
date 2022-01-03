@@ -21,7 +21,7 @@ impl FromStr for Callsign {
     type Err = APRSError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let delimiter = s.find("-"); //.ok_or_else(|| APRSError::EmptyCallsign(s.to_owned()))?;
+        let delimiter = s.find('-'); //.ok_or_else(|| APRSError::EmptyCallsign(s.to_owned()))?;
         if delimiter.is_none() {
             return Ok(Callsign::new(s, None));
         }
@@ -34,7 +34,7 @@ impl FromStr for Callsign {
         let (call, rest) = s.split_at(delimiter);
         let ssid = &rest[1..rest.len()];
 
-        if ssid.len() == 0 {
+        if ssid.is_empty() {
             return Err(APRSError::EmptySSID(s.to_owned()));
         }
 
