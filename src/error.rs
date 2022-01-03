@@ -1,19 +1,19 @@
-#[derive(Debug, Fail, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum APRSError {
-    #[fail(display = "Empty Callsign: {}", _0)]
+    #[error("Empty Callsign: {0}")]
     EmptyCallsign(String),
-    #[fail(display = "Empty Callsign SSID: {}", _0)]
+    #[error("Empty Callsign SSID: {0}")]
     EmptySSID(String),
-    #[fail(display = "Invalid Timestamp: {}", _0)]
+    #[error("Invalid Timestamp: {0}")]
     InvalidTimestamp(String),
-    #[fail(display = "Unsupported Position Format: {}", _0)]
+    #[error("Unsupported Position Format: {0}")]
     UnsupportedPositionFormat(String),
-    #[fail(display = "Invalid Position: {}", _0)]
+    #[error("Invalid Position: {0}")]
     InvalidPosition(String),
-    #[fail(display = "Invalid Latitude: {}", _0)]
+    #[error("Invalid Latitude: {0}")]
     InvalidLatitude(String),
-    #[fail(display = "Invalid Longitude: {}", _0)]
+    #[error("Invalid Longitude: {0}")]
     InvalidLongitude(String),
-    #[fail(display = "Invalid Message: {}", _0)]
+    #[error("Invalid Message: {0}")]
     InvalidMessage(String),
 }
