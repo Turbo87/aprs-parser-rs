@@ -32,3 +32,12 @@ jobs:
       - run: rustup default 1.57.0
       - run: rustup component add rustfmt
       - run: cargo fmt -- --check
+
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup default 1.57.0
+      - run: rustup component add clippy
+      - run: cargo clippy -- --deny warnings
