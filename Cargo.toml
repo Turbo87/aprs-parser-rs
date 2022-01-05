@@ -12,6 +12,7 @@ exclude = [".gitignore", ".travis.yml"]
 
 [dependencies]
 thiserror = "1.0.30"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 approx = "0.5.0"
