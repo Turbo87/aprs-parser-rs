@@ -80,6 +80,8 @@ mod tests {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
                 assert_relative_eq!(*position.latitude, 48.360166);
                 assert_relative_eq!(*position.longitude, 12.408166);
+                assert_eq!(position.symbol_table, '\\');
+                assert_eq!(position.symbol_code, '^');
                 assert_eq!(
                     position.comment,
                     "322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
