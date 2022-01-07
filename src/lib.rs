@@ -54,6 +54,9 @@
 //! }
 //! ```
 
+// `!(-90. ..=90.).contains(&value)` seems worse than `value > 90. || value < -90.`
+#![allow(clippy::manual_range_contains)]
+
 extern crate thiserror;
 
 #[cfg(test)]
@@ -71,6 +74,7 @@ use std::str::FromStr;
 
 pub use callsign::Callsign;
 pub use error::AprsError;
+pub use lonlat::{Latitude, Longitude};
 pub use message::{AprsData, AprsMessage};
 pub use position::AprsPosition;
 pub use timestamp::Timestamp;
