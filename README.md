@@ -24,40 +24,45 @@ fn main() {
     println!("{:#?}", result);
 
     // Ok(
-    //     APRSMessage {
+    //     AprsMessage {
     //         from: Callsign {
     //             call: "ICA3D17F2",
-    //             ssid: None
+    //             ssid: None,
     //         },
     //         to: Callsign {
     //             call: "APRS",
-    //             ssid: None
+    //             ssid: None,
     //         },
     //         via: [
     //             Callsign {
     //                 call: "qAS",
-    //                 ssid: None
+    //                 ssid: None,
     //             },
     //             Callsign {
     //                 call: "dl4mea",
-    //                 ssid: None
-    //             }
+    //                 ssid: None,
+    //             },
     //         ],
     //         data: Position(
-    //             APRSPosition {
+    //             AprsPosition {
     //                 timestamp: Some(
     //                     HHMMSS(
     //                         7,
     //                         48,
-    //                         49
-    //                     )
+    //                         49,
+    //                     ),
     //                 ),
-    //                 latitude: 48.360165,
-    //                 longitude: 12.408166,
-    //                 comment: "322/103/A=003054"
-    //             }
-    //         )
-    //     }
+    //                 latitude: Latitude(
+    //                     48.360165,
+    //                 ),
+    //                 longitude: Longitude(
+    //                     12.408166,
+    //                 ),
+    //                 symbol: Aircraft,
+    //                 comment: "322/103/A=003054",
+    //             },
+    //         ),
+    //     },
     // )
 }
 ```
