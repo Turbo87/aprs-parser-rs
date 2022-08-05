@@ -25,10 +25,7 @@ impl FromStr for AprsMessage {
             return Err(AprsError::InvalidMessageDestination(addressee.to_string()));
         }
 
-        let addressee = addressee
-            .split_once(' ')
-            .map_or(addressee, |x| x.0)
-            .to_string();
+        let addressee = addressee.trim().to_string();
 
         let text = splitter.next().unwrap_or("");
         let mut text_splitter = text.splitn(2, '{');
