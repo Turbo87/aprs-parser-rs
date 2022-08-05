@@ -1,91 +1,87 @@
-use std::str::FromStr;
-
 use AprsError;
-use AprsPosition;
-use Callsign;
+use FromStr;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsMessage {
-    pub from: Callsign,
-    pub to: Callsign,
-    pub via: Vec<Callsign>,
-    pub data: AprsData,
+    pub addressee: String,
+    pub text: String,
+    pub id: Option<u32>,
 }
 
 impl FromStr for AprsMessage {
     type Err = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let header_delimiter = s
-            .find(':')
-            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
-        let (header, rest) = s.split_at(header_delimiter);
-        let body = &rest[1..];
+    fn from_str(s: &str) -> Result<Self, AprsError> {
+        let mut splitter = s.splitn(2, ':');
 
-        let from_delimiter = header
-            .find('>')
-            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
-        let (from, rest) = header.split_at(from_delimiter);
-        let from = Callsign::from_str(from)?;
+        let addressee = match splitter.next() {
+            Some(x) => x,
+            None => {
+                return Err(AprsError::InvalidMessageDestination("".to_string()));
+            }
+        };
 
-        let to_and_via = &rest[1..];
-        let to_and_via: Vec<_> = to_and_via.split(',').collect();
-
-        let to = to_and_via
-            .first()
-            .ok_or_else(|| AprsError::InvalidMessage(s.to_owned()))?;
-        let to = Callsign::from_str(to)?;
-
-        let mut via = vec![];
-        for v in to_and_via.iter().skip(1) {
-            via.push(Callsign::from_str(v)?);
+        if addressee.len() != 9 {
+            return Err(AprsError::InvalidMessageDestination(addressee.to_string()));
         }
 
-        let data = AprsPosition::from_str(body)
-            .map(AprsData::Position)
-            .unwrap_or(AprsData::Unknown);
+        let addressee = addressee.trim().to_string();
 
-        Ok(AprsMessage {
-            from,
-            to,
-            via,
-            data,
+        let text = splitter.next().unwrap_or("");
+        let mut text_splitter = text.splitn(2, '{');
+        let text = text_splitter.next().unwrap_or("").to_string();
+        let id_s = text_splitter.next();
+
+        let id: Option<u32> = match id_s {
+            Some(s) => {
+                let id = s.parse();
+
+                match id {
+                    Ok(x) => {
+                        if x < 100_000 {
+                            Some(x)
+                        } else {
+                            return Err(AprsError::InvalidMessageId(s.to_string()));
+                        }
+                    }
+
+                    Err(_) => return Err(AprsError::InvalidMessageId(s.to_string())),
+                }
+            }
+            None => None,
+        };
+
+        Ok(Self {
+            addressee,
+            text,
+            id,
         })
     }
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum AprsData {
-    Position(AprsPosition),
-    Unknown,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use Timestamp;
 
     #[test]
-    fn parse() {
-        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<AprsMessage>().unwrap();
-        assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
-        assert_eq!(result.to, Callsign::new("APRS", None));
-        assert_eq!(
-            result.via,
-            vec![Callsign::new("qAS", None), Callsign::new("dl4mea", None),]
-        );
+    fn parse_message_invalid_dest() {
+        // Dest must be padded with spaces to 9 characters long
+        let result = r"DEST  :Hello World! This msg has a : colon {32975".parse::<AprsMessage>();
 
-        match result.data {
-            AprsData::Position(position) => {
-                assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-                assert_relative_eq!(*position.latitude, 48.360166);
-                assert_relative_eq!(*position.longitude, 12.408166);
-                assert_eq!(
-                    position.comment,
-                    "322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
-                );
-            }
-            _ => panic!("Unexpected data type"),
-        }
+        assert_eq!(
+            result,
+            Err(AprsError::InvalidMessageDestination("DEST  ".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_message_invalid_id() {
+        let result =
+            r"DESTINATI:Hello World! This msg has a : colon {329754".parse::<AprsMessage>();
+
+        assert_eq!(
+            result,
+            Err(AprsError::InvalidMessageId("329754".to_string()))
+        );
     }
 }
