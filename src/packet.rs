@@ -1,9 +1,11 @@
+use std::fmt::Write;
 use std::str::FromStr;
 
 use AprsError;
 use AprsMessage;
 use AprsPosition;
 use Callsign;
+use EncodeError;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPacket {
@@ -53,6 +55,19 @@ impl FromStr for AprsPacket {
     }
 }
 
+impl AprsPacket {
+    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        write!(buf, "{}>{}", self.from, self.to)?;
+        for v in &self.via {
+            write!(buf, ",{}", v).unwrap();
+        }
+        write!(buf, ":")?;
+        self.data.encode(buf)?;
+
+        Ok(())
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum AprsData {
     Position(AprsPosition),
@@ -69,6 +84,22 @@ impl FromStr for AprsData {
             '!' | '/' | '=' | '@' => AprsData::Position(AprsPosition::from_str(s)?),
             _ => AprsData::Unknown,
         })
+    }
+}
+
+impl AprsData {
+    fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        match self {
+            Self::Position(p) => {
+                p.encode(buf)?;
+            }
+            Self::Message(m) => {
+                write!(buf, "{}", m)?;
+            }
+            Self::Unknown => return Err(EncodeError::InvalidData),
+        }
+
+        Ok(())
     }
 }
 
@@ -121,6 +152,24 @@ mod tests {
                 assert_eq!(msg.id, Some(32975));
             }
             _ => panic!("Unexpected data type"),
+        }
+    }
+
+    #[test]
+    fn e2e_serialize_deserialize() {
+        let valids = vec![
+            r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ICA3D17F2>APRS,qAS,dl4mea:@074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ICA3D17F2>APRS,qAS,dl4mea:!4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ICA3D17F2>APRS,qAS,dl4mea:=4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {32975",
+            r"ICA3D17F2>Aprs,qAS,dl4mea::DESTINATI:Hello World! This msg has a : colon ",
+        ];
+
+        for v in valids {
+            let mut buf = String::new();
+            v.parse::<AprsPacket>().unwrap().encode(&mut buf).unwrap();
+            assert_eq!(buf, v)
         }
     }
 }

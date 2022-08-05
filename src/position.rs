@@ -1,7 +1,9 @@
+use std::fmt::Write;
 use std::str::FromStr;
 
-use lonlat::{Latitude, Longitude};
+use lonlat::{encode_latitude, encode_longitude, Latitude, Longitude};
 use AprsError;
+use EncodeError;
 use Timestamp;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -10,6 +12,8 @@ pub struct AprsPosition {
     pub messaging_supported: bool,
     pub latitude: Latitude,
     pub longitude: Longitude,
+    pub symbol_table: char,
+    pub symbol_code: char,
     pub comment: String,
 }
 
@@ -48,6 +52,9 @@ impl FromStr for AprsPosition {
         let latitude = s[0..8].parse()?;
         let longitude = s[9..18].parse()?;
 
+        let symbol_table = s.chars().nth(8).unwrap();
+        let symbol_code = s.chars().nth(18).unwrap();
+
         let comment = &s[19..s.len()];
 
         Ok(AprsPosition {
@@ -55,8 +62,39 @@ impl FromStr for AprsPosition {
             messaging_supported,
             latitude,
             longitude,
+            symbol_table,
+            symbol_code,
             comment: comment.to_owned(),
         })
+    }
+}
+
+impl AprsPosition {
+    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        let sym = match (self.timestamp.is_some(), self.messaging_supported) {
+            (true, true) => '@',
+            (true, false) => '/',
+            (false, true) => '=',
+            (false, false) => '!',
+        };
+
+        write!(buf, "{}", sym)?;
+
+        if let Some(ts) = &self.timestamp {
+            write!(buf, "{}", ts)?;
+        }
+
+        write!(
+            buf,
+            "{}{}{}{}{}",
+            encode_latitude(self.latitude)?,
+            self.symbol_table,
+            encode_longitude(self.longitude)?,
+            self.symbol_code,
+            self.comment,
+        )?;
+
+        Ok(())
     }
 }
 
@@ -71,6 +109,8 @@ mod tests {
         assert_eq!(result.messaging_supported, false);
         assert_relative_eq!(*result.latitude, 49.05833);
         assert_relative_eq!(*result.longitude, -72.02916);
+        assert_eq!(result.symbol_table, '/');
+        assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, "");
     }
 
@@ -82,6 +122,8 @@ mod tests {
         assert_eq!(result.timestamp, None);
         assert_relative_eq!(*result.latitude, 49.05833);
         assert_relative_eq!(*result.longitude, -72.02916);
+        assert_eq!(result.symbol_table, '/');
+        assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, "Hello/A=001000");
     }
 
@@ -94,6 +136,8 @@ mod tests {
         assert_eq!(result.messaging_supported, false);
         assert_relative_eq!(*result.latitude, 48.360166);
         assert_relative_eq!(*result.longitude, 12.408166);
+        assert_eq!(result.symbol_table, '\\');
+        assert_eq!(result.symbol_code, '^');
         assert_eq!(result.comment, "322/103/A=003054");
     }
 
@@ -104,6 +148,8 @@ mod tests {
         assert_eq!(result.messaging_supported, true);
         assert_relative_eq!(*result.latitude, 49.05833);
         assert_relative_eq!(*result.longitude, -72.02916);
+        assert_eq!(result.symbol_table, '/');
+        assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, "");
     }
 
@@ -116,6 +162,8 @@ mod tests {
         assert_eq!(result.messaging_supported, true);
         assert_relative_eq!(*result.latitude, 48.360166);
         assert_relative_eq!(*result.longitude, 12.408166);
+        assert_eq!(result.symbol_table, '\\');
+        assert_eq!(result.symbol_code, '^');
         assert_eq!(result.comment, "322/103/A=003054");
     }
 }

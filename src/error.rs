@@ -21,3 +21,15 @@ pub enum AprsError {
     #[error("Invalid Message ID: {0}")]
     InvalidMessageId(String),
 }
+
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum EncodeError {
+    #[error("Invalid Latitude: {0}")]
+    InvalidLatitude(f32),
+    #[error("Invalid Longitude: {0}")]
+    InvalidLongitude(f32),
+    #[error("Invalid Aprs Data")]
+    InvalidData,
+    #[error(transparent)]
+    Format(#[from] std::fmt::Error),
+}

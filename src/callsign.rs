@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use AprsError;
@@ -39,6 +40,18 @@ impl FromStr for Callsign {
         }
 
         Ok(Callsign::new(call, Some(ssid)))
+    }
+}
+
+impl Display for Callsign {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.call)?;
+
+        if let Some(ssid) = &self.ssid {
+            write!(f, "-{}", ssid)?;
+        }
+
+        Ok(())
     }
 }
 
