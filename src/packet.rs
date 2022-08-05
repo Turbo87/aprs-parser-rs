@@ -123,29 +123,4 @@ mod tests {
             _ => panic!("Unexpected data type"),
         }
     }
-
-    #[test]
-    fn parse_message_invalid_dest() {
-        // Dest must be padded with spaces to 9 characters long
-        let result =
-            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST  :Hello World! This msg has a : colon {32975"
-                .parse::<AprsPacket>();
-
-        assert_eq!(
-            result,
-            Err(AprsError::InvalidMessageDestination("DEST  ".to_string()))
-        );
-    }
-
-    #[test]
-    fn parse_message_invalid_id() {
-        let result =
-            r"ICA3D17F2>Aprs,qAS,dl4mea::DESTINATI:Hello World! This msg has a : colon {329754"
-                .parse::<AprsPacket>();
-
-        assert_eq!(
-            result,
-            Err(AprsError::InvalidMessageId("329754".to_string()))
-        );
-    }
 }

@@ -61,3 +61,30 @@ impl FromStr for AprsMessage {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_message_invalid_dest() {
+        // Dest must be padded with spaces to 9 characters long
+        let result = r"DEST  :Hello World! This msg has a : colon {32975".parse::<AprsMessage>();
+
+        assert_eq!(
+            result,
+            Err(AprsError::InvalidMessageDestination("DEST  ".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_message_invalid_id() {
+        let result =
+            r"DESTINATI:Hello World! This msg has a : colon {329754".parse::<AprsMessage>();
+
+        assert_eq!(
+            result,
+            Err(AprsError::InvalidMessageId("329754".to_string()))
+        );
+    }
+}
