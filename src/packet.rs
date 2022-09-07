@@ -149,7 +149,7 @@ mod tests {
             AprsData::Message(msg) => {
                 assert_eq!(msg.addressee, "DEST");
                 assert_eq!(msg.text, "Hello World! This msg has a : colon ");
-                assert_eq!(msg.id, Some("3a2B975".to_string()));
+                assert_eq!(msg.id.as_deref(), Some("3a2B975"));
             }
             _ => panic!("Unexpected data type"),
         }
