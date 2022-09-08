@@ -44,8 +44,11 @@
 //!     //                         49
 //!     //                     )
 //!     //                 ),
-//!     //                 latitude: 48.360165,
-//!     //                 longitude: 12.408166,
+//!     //                 messaging_supported: false,
+//!     //                 latitude: Latitude(48.360165),
+//!     //                 longitude: Longitude(12.408166),
+//!     //                 symbol_table: '\\',
+//!     //                 symbol_code: '^',
 //!     //                 comment: "322/103/A=003054"
 //!     //             }
 //!     //         )

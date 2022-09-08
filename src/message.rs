@@ -7,7 +7,7 @@ use FromStr;
 pub struct AprsMessage {
     pub addressee: String,
     pub text: String,
-    pub id: Option<u32>,
+    pub id: Option<String>,
 }
 
 impl FromStr for AprsMessage {
@@ -32,26 +32,7 @@ impl FromStr for AprsMessage {
         let text = splitter.next().unwrap_or("");
         let mut text_splitter = text.splitn(2, '{');
         let text = text_splitter.next().unwrap_or("").to_string();
-        let id_s = text_splitter.next();
-
-        let id: Option<u32> = match id_s {
-            Some(s) => {
-                let id = s.parse();
-
-                match id {
-                    Ok(x) => {
-                        if x < 100_000 {
-                            Some(x)
-                        } else {
-                            return Err(AprsError::InvalidMessageId(s.to_string()));
-                        }
-                    }
-
-                    Err(_) => return Err(AprsError::InvalidMessageId(s.to_string())),
-                }
-            }
-            None => None,
-        };
+        let id = text_splitter.next().map(|s| s.to_string());
 
         Ok(Self {
             addressee,
@@ -77,13 +58,45 @@ mod tests {
     }
 
     #[test]
-    fn parse_message_invalid_id() {
+    fn parse_message_id() {
         let result =
-            r"DESTINATI:Hello World! This msg has a : colon {329754".parse::<AprsMessage>();
+            r"DESTINATI:Hello World! This msg has a : colon {329A7D5Z4".parse::<AprsMessage>();
 
         assert_eq!(
             result,
-            Err(AprsError::InvalidMessageId("329754".to_string()))
+            Ok(AprsMessage {
+                addressee: "DESTINATI".to_string(),
+                id: Some("329A7D5Z4".to_string()),
+                text: "Hello World! This msg has a : colon ".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_message_empty_id() {
+        let result = r"DESTINATI:Hello World! This msg has a : colon {".parse::<AprsMessage>();
+
+        assert_eq!(
+            result,
+            Ok(AprsMessage {
+                addressee: "DESTINATI".to_string(),
+                id: Some("".to_string()),
+                text: "Hello World! This msg has a : colon ".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_message_no_id() {
+        let result = r"DESTINATI:Hello World! This msg has a : colon ".parse::<AprsMessage>();
+
+        assert_eq!(
+            result,
+            Ok(AprsMessage {
+                addressee: "DESTINATI".to_string(),
+                id: None,
+                text: "Hello World! This msg has a : colon ".to_string()
+            })
         );
     }
 }
@@ -92,7 +105,7 @@ impl Display for AprsMessage {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, ":{: <9}:{}", self.addressee, self.text)?;
 
-        if let Some(id) = self.id {
+        if let Some(id) = &self.id {
             write!(f, "{{{}", id)?;
         }
 

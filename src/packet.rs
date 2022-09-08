@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn parse_message() {
         let result =
-            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {32975"
+            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {3a2B975"
                 .parse::<AprsPacket>()
                 .unwrap();
         assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
@@ -149,7 +149,7 @@ mod tests {
             AprsData::Message(msg) => {
                 assert_eq!(msg.addressee, "DEST");
                 assert_eq!(msg.text, "Hello World! This msg has a : colon ");
-                assert_eq!(msg.id, Some(32975));
+                assert_eq!(msg.id.as_deref(), Some("3a2B975"));
             }
             _ => panic!("Unexpected data type"),
         }

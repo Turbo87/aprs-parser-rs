@@ -18,8 +18,6 @@ pub enum AprsError {
     InvalidPacket(String),
     #[error("Invalid Message Destination: {0}")]
     InvalidMessageDestination(String),
-    #[error("Invalid Message ID: {0}")]
-    InvalidMessageId(String),
 }
 
 #[derive(Debug, PartialEq, thiserror::Error)]
