@@ -1,5 +1,5 @@
-use std::fmt::Write;
-use std::str::FromStr;
+use std::convert::TryFrom;
+use std::io::Write;
 
 use AprsError;
 use AprsMessage;
@@ -15,36 +15,38 @@ pub struct AprsPacket {
     pub data: AprsData,
 }
 
-impl FromStr for AprsPacket {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for AprsPacket {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+    fn try_from(s: &[u8]) -> Result<Self, Self::Error> {
         let header_delimiter = s
-            .find(':')
+            .iter()
+            .position(|x| *x == b':')
             .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
         let (header, rest) = s.split_at(header_delimiter);
         let body = &rest[1..];
 
         let from_delimiter = header
-            .find('>')
+            .iter()
+            .position(|x| *x == b'>')
             .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
         let (from, rest) = header.split_at(from_delimiter);
-        let from = Callsign::from_str(from)?;
+        let from = Callsign::try_from(from)?;
 
         let to_and_via = &rest[1..];
-        let to_and_via: Vec<_> = to_and_via.split(',').collect();
+        let to_and_via: Vec<_> = to_and_via.split(|x| *x == b',').collect();
 
         let to = to_and_via
             .first()
             .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
-        let to = Callsign::from_str(to)?;
+        let to = Callsign::try_from(*to)?;
 
         let mut via = vec![];
         for v in to_and_via.iter().skip(1) {
-            via.push(Callsign::from_str(v)?);
+            via.push(Callsign::try_from(*v)?);
         }
 
-        let data = AprsData::from_str(body)?;
+        let data = AprsData::try_from(body)?;
 
         Ok(AprsPacket {
             from,
@@ -75,13 +77,13 @@ pub enum AprsData {
     Unknown,
 }
 
-impl FromStr for AprsData {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for AprsData {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, AprsError> {
-        Ok(match s.chars().next().unwrap_or(0 as char) {
-            ':' => AprsData::Message(AprsMessage::from_str(&s[1..])?),
-            '!' | '/' | '=' | '@' => AprsData::Position(AprsPosition::from_str(s)?),
+    fn try_from(s: &[u8]) -> Result<Self, AprsError> {
+        Ok(match *s.first().unwrap_or(&0) {
+            b':' => AprsData::Message(AprsMessage::try_from(&s[1..])?),
+            b'!' | b'/' | b'=' | b'@' => AprsData::Position(AprsPosition::try_from(s)?),
             _ => AprsData::Unknown,
         })
     }
@@ -110,7 +112,7 @@ mod tests {
 
     #[test]
     fn parse() {
-        let result = r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".parse::<AprsPacket>().unwrap();
+        let result = AprsPacket::try_from(r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".as_bytes()).unwrap();
         assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
         assert_eq!(result.to, Callsign::new("APRS", None));
         assert_eq!(
@@ -125,7 +127,7 @@ mod tests {
                 assert_relative_eq!(*position.longitude, 12.408166);
                 assert_eq!(
                     position.comment,
-                    "322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
+                    b"322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
                 );
             }
             _ => panic!("Unexpected data type"),
@@ -134,10 +136,10 @@ mod tests {
 
     #[test]
     fn parse_message() {
-        let result =
-            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {3a2B975"
-                .parse::<AprsPacket>()
-                .unwrap();
+        let result = AprsPacket::try_from(
+            &b"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {3a2B975"[..],
+        )
+        .unwrap();
         assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
         assert_eq!(result.to, Callsign::new("Aprs", None));
         assert_eq!(
@@ -147,9 +149,9 @@ mod tests {
 
         match result.data {
             AprsData::Message(msg) => {
-                assert_eq!(msg.addressee, "DEST");
-                assert_eq!(msg.text, "Hello World! This msg has a : colon ");
-                assert_eq!(msg.id.as_deref(), Some("3a2B975"));
+                assert_eq!(msg.addressee, b"DEST");
+                assert_eq!(msg.text, b"Hello World! This msg has a : colon ");
+                assert_eq!(msg.id, Some(b"3a2B975".to_vec()));
             }
             _ => panic!("Unexpected data type"),
         }
@@ -167,9 +169,12 @@ mod tests {
         ];
 
         for v in valids {
-            let mut buf = String::new();
-            v.parse::<AprsPacket>().unwrap().encode(&mut buf).unwrap();
-            assert_eq!(buf, v)
+            let mut buf = vec![];
+            AprsPacket::try_from(v.as_bytes())
+                .unwrap()
+                .encode(&mut buf)
+                .unwrap();
+            assert_eq!(buf, v.as_bytes())
         }
     }
 }

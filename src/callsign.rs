@@ -1,5 +1,5 @@
+use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
-use std::str::FromStr;
 
 use AprsError;
 
@@ -18,11 +18,13 @@ impl Callsign {
     }
 }
 
-impl FromStr for Callsign {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for Callsign {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let delimiter = s.find('-'); //.ok_or_else(|| AprsError::EmptyCallsign(s.to_owned()))?;
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let s = std::str::from_utf8(b).map_err(|_| AprsError::NonUtf8Callsign(b.to_owned()))?;
+
+        let delimiter = s.find('-');
         if delimiter.is_none() {
             return Ok(Callsign::new(s, None));
         }
@@ -58,21 +60,28 @@ impl Display for Callsign {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::convert::TryInto;
 
     #[test]
     fn parse_callsign() {
-        assert_eq!("ABCDEF".parse(), Ok(Callsign::new("ABCDEF", None)));
+        assert_eq!(
+            "ABCDEF".as_bytes().try_into(),
+            Ok(Callsign::new("ABCDEF", None))
+        );
     }
 
     #[test]
     fn parse_with_ssid() {
-        assert_eq!("ABCDEF-42".parse(), Ok(Callsign::new("ABCDEF", Some("42"))));
+        assert_eq!(
+            "ABCDEF-42".as_bytes().try_into(),
+            Ok(Callsign::new("ABCDEF", Some("42")))
+        );
     }
 
     #[test]
     fn empty_callsign() {
         assert_eq!(
-            "-42".parse::<Callsign>(),
+            Callsign::try_from("-42".as_bytes()),
             Err(AprsError::EmptyCallsign("-42".to_owned()))
         );
     }
@@ -80,7 +89,7 @@ mod tests {
     #[test]
     fn empty_ssid() {
         assert_eq!(
-            "ABCDEF-".parse::<Callsign>(),
+            Callsign::try_from("ABCDEF-".as_bytes()),
             Err(AprsError::EmptySSID("ABCDEF-".to_owned()))
         );
     }

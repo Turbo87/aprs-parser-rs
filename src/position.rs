@@ -1,5 +1,5 @@
-use std::fmt::Write;
-use std::str::FromStr;
+use std::convert::TryFrom;
+use std::io::Write;
 
 use lonlat::{encode_latitude, encode_longitude, Latitude, Longitude};
 use AprsError;
@@ -14,48 +14,45 @@ pub struct AprsPosition {
     pub longitude: Longitude,
     pub symbol_table: char,
     pub symbol_code: char,
-    pub comment: String,
+    pub comment: Vec<u8>,
 }
 
-impl FromStr for AprsPosition {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for AprsPosition {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let messaging_supported = s.starts_with('=') || s.starts_with('@');
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let first = *b.get(0).ok_or_else(|| AprsError::InvalidPosition(vec![]))? as char;
+        let messaging_supported = first == '=' || first == '@';
 
         // parse timestamp if necessary
-        let has_timestamp = s.starts_with('@') || s.starts_with('/');
+        let has_timestamp = first == '@' || first == '/';
         let timestamp = if has_timestamp {
-            Some(s[1..8].parse()?)
+            Some(Timestamp::try_from(&b[1..8])?)
         } else {
             None
         };
 
         // strip leading type symbol and potential timestamp
-        let s = if has_timestamp {
-            &s[8..s.len()]
-        } else {
-            &s[1..s.len()]
-        };
+        let b = if has_timestamp { &b[8..] } else { &b[1..] };
 
         // check for compressed position format
-        let is_uncompressed_position = s.chars().take(1).all(|c| c.is_numeric());
+        let is_uncompressed_position = (*b.get(0).unwrap_or(&0) as char).is_numeric();
         if !is_uncompressed_position {
-            return Err(AprsError::UnsupportedPositionFormat(s.to_owned()));
+            return Err(AprsError::UnsupportedPositionFormat(b.to_owned()));
         }
 
-        if s.len() < 19 {
-            return Err(AprsError::InvalidPosition(s.to_owned()));
+        if b.len() < 19 {
+            return Err(AprsError::InvalidPosition(b.to_owned()));
         }
 
         // parse position
-        let latitude = s[0..8].parse()?;
-        let longitude = s[9..18].parse()?;
+        let latitude = Latitude::try_from(&b[0..8])?;
+        let longitude = Longitude::try_from(&b[9..18])?;
 
-        let symbol_table = s.chars().nth(8).unwrap();
-        let symbol_code = s.chars().nth(18).unwrap();
+        let symbol_table = b[8] as char;
+        let symbol_code = b[18] as char;
 
-        let comment = &s[19..s.len()];
+        let comment = &b[19..b.len()];
 
         Ok(AprsPosition {
             timestamp,
@@ -86,13 +83,13 @@ impl AprsPosition {
 
         write!(
             buf,
-            "{}{}{}{}{}",
+            "{}{}{}{}",
             encode_latitude(self.latitude)?,
             self.symbol_table,
             encode_longitude(self.longitude)?,
             self.symbol_code,
-            self.comment,
         )?;
+        buf.write_all(&self.comment)?;
 
         Ok(())
     }
@@ -104,66 +101,64 @@ mod tests {
 
     #[test]
     fn parse_without_timestamp_or_messaging() {
-        let result = r"!4903.50N/07201.75W-".parse::<AprsPosition>().unwrap();
+        let result = AprsPosition::try_from(&b"!4903.50N/07201.75W-"[..]).unwrap();
         assert_eq!(result.timestamp, None);
-        assert_eq!(result.messaging_supported, false);
+        assert!(!result.messaging_supported);
         assert_relative_eq!(*result.latitude, 49.05833);
         assert_relative_eq!(*result.longitude, -72.02916);
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
-        assert_eq!(result.comment, "");
+        assert_eq!(result.comment, []);
     }
 
     #[test]
     fn parse_with_comment() {
-        let result = r"!4903.50N/07201.75W-Hello/A=001000"
-            .parse::<AprsPosition>()
-            .unwrap();
+        let result = AprsPosition::try_from(&b"!4903.50N/07201.75W-Hello/A=001000"[..]).unwrap();
         assert_eq!(result.timestamp, None);
         assert_relative_eq!(*result.latitude, 49.05833);
         assert_relative_eq!(*result.longitude, -72.02916);
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
-        assert_eq!(result.comment, "Hello/A=001000");
+        assert_eq!(result.comment, b"Hello/A=001000");
     }
 
     #[test]
     fn parse_with_timestamp_without_messaging() {
-        let result = r"/074849h4821.61N\01224.49E^322/103/A=003054"
-            .parse::<AprsPosition>()
-            .unwrap();
+        let result =
+            AprsPosition::try_from(r"/074849h4821.61N\01224.49E^322/103/A=003054".as_bytes())
+                .unwrap();
         assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-        assert_eq!(result.messaging_supported, false);
+        assert!(!result.messaging_supported);
         assert_relative_eq!(*result.latitude, 48.360166);
         assert_relative_eq!(*result.longitude, 12.408166);
         assert_eq!(result.symbol_table, '\\');
         assert_eq!(result.symbol_code, '^');
-        assert_eq!(result.comment, "322/103/A=003054");
+        assert_eq!(result.comment, b"322/103/A=003054");
     }
 
     #[test]
     fn parse_without_timestamp_with_messaging() {
-        let result = r"=4903.50N/07201.75W-".parse::<AprsPosition>().unwrap();
+        let result = AprsPosition::try_from(&b"=4903.50N/07201.75W-"[..]).unwrap();
         assert_eq!(result.timestamp, None);
-        assert_eq!(result.messaging_supported, true);
+        assert!(result.messaging_supported);
         assert_relative_eq!(*result.latitude, 49.05833);
         assert_relative_eq!(*result.longitude, -72.02916);
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
-        assert_eq!(result.comment, "");
+        assert_eq!(result.comment, []);
     }
 
     #[test]
     fn parse_with_timestamp_and_messaging() {
-        let result = r"@074849h4821.61N\01224.49E^322/103/A=003054"
-            .parse::<AprsPosition>()
-            .unwrap();
+        let result =
+            AprsPosition::try_from(r"@074849h4821.61N\01224.49E^322/103/A=003054".as_bytes())
+                .unwrap();
         assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-        assert_eq!(result.messaging_supported, true);
+        assert!(result.messaging_supported);
         assert_relative_eq!(*result.latitude, 48.360166);
         assert_relative_eq!(*result.longitude, 12.408166);
         assert_eq!(result.symbol_table, '\\');
         assert_eq!(result.symbol_code, '^');
-        assert_eq!(result.comment, "322/103/A=003054");
+        assert_eq!(result.comment, b"322/103/A=003054");
     }
 }

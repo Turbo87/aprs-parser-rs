@@ -1,6 +1,7 @@
+use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
-use std::str::FromStr;
 
+use bytes::parse_bytes;
 use AprsError;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -10,34 +11,27 @@ pub enum Timestamp {
     /// Hour, Minute and Second in UTC
     HHMMSS(u8, u8, u8),
     /// Unsupported timestamp format
-    Unsupported(String),
+    Unsupported(Vec<u8>),
 }
 
-impl FromStr for Timestamp {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for Timestamp {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let b = s.as_bytes();
-
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         if b.len() != 7 {
-            return Err(AprsError::InvalidTimestamp(s.to_owned()));
+            return Err(AprsError::InvalidTimestamp(b.to_owned()));
         }
 
-        let one = s[0..2]
-            .parse::<u8>()
-            .map_err(|_| AprsError::InvalidTimestamp(s.to_owned()))?;
-        let two = s[2..4]
-            .parse::<u8>()
-            .map_err(|_| AprsError::InvalidTimestamp(s.to_owned()))?;
-        let three = s[4..6]
-            .parse::<u8>()
-            .map_err(|_| AprsError::InvalidTimestamp(s.to_owned()))?;
+        let one = parse_bytes(&b[0..2]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
+        let two = parse_bytes(&b[2..4]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
+        let three =
+            parse_bytes(&b[4..6]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
 
-        Ok(match b[6] as char {
-            'z' => Timestamp::DDHHMM(one, two, three),
-            'h' => Timestamp::HHMMSS(one, two, three),
-            '/' => Timestamp::Unsupported(s.to_owned()),
-            _ => return Err(AprsError::InvalidTimestamp(s.to_owned())),
+        Ok(match b[6] {
+            b'z' => Timestamp::DDHHMM(one, two, three),
+            b'h' => Timestamp::HHMMSS(one, two, three),
+            b'/' => Timestamp::Unsupported(b.to_owned()),
+            _ => return Err(AprsError::InvalidTimestamp(b.to_owned())),
         })
     }
 }
@@ -47,7 +41,7 @@ impl Display for Timestamp {
         match self {
             Self::DDHHMM(d, h, m) => write!(f, "{:02}{:02}{:02}z", d, h, m),
             Self::HHMMSS(h, m, s) => write!(f, "{:02}{:02}{:02}h", h, m, s),
-            Self::Unsupported(s) => write!(f, "{}", s),
+            Self::Unsupported(s) => write!(f, "{}", String::from_utf8_lossy(s)),
         }
     }
 }
@@ -58,35 +52,41 @@ mod tests {
 
     #[test]
     fn parse_ddhhmm() {
-        assert_eq!("123456z".parse(), Ok(Timestamp::DDHHMM(12, 34, 56)));
+        assert_eq!(
+            Timestamp::try_from(&b"123456z"[..]),
+            Ok(Timestamp::DDHHMM(12, 34, 56))
+        );
     }
 
     #[test]
     fn parse_hhmmss() {
-        assert_eq!("123456h".parse(), Ok(Timestamp::HHMMSS(12, 34, 56)));
+        assert_eq!(
+            Timestamp::try_from(&b"123456h"[..]),
+            Ok(Timestamp::HHMMSS(12, 34, 56))
+        );
     }
 
     #[test]
     fn parse_local_time() {
         assert_eq!(
-            "123456/".parse::<Timestamp>(),
-            Ok(Timestamp::Unsupported("123456/".to_owned()))
+            Timestamp::try_from(&b"123456/"[..]),
+            Ok(Timestamp::Unsupported(b"123456/".to_vec()))
         );
     }
 
     #[test]
     fn invalid_timestamp() {
         assert_eq!(
-            "1234567".parse::<Timestamp>(),
-            Err(AprsError::InvalidTimestamp("1234567".to_owned()))
+            Timestamp::try_from(&b"1234567"[..]),
+            Err(AprsError::InvalidTimestamp(b"1234567".to_vec()))
         );
     }
 
     #[test]
     fn invalid_timestamp2() {
         assert_eq!(
-            "123a56z".parse::<Timestamp>(),
-            Err(AprsError::InvalidTimestamp("123a56z".to_owned()))
+            Timestamp::try_from(&b"123a56z"[..]),
+            Err(AprsError::InvalidTimestamp(b"123a56z".to_vec()))
         );
     }
 }
