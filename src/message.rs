@@ -1,13 +1,40 @@
 use std::convert::TryFrom;
-use std::fmt::{Display, Formatter};
+use std::io::Write;
 
 use AprsError;
+use EncodeError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsMessage {
     pub addressee: Vec<u8>,
     pub text: Vec<u8>,
     pub id: Option<Vec<u8>>,
+}
+
+impl AprsMessage {
+    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        if self.addressee.len() > 9 {
+            return Err(EncodeError::InvalidMessageAddressee(
+                self.addressee.to_owned(),
+            ));
+        }
+
+        buf.write_all(b":")?;
+        buf.write_all(&self.addressee)?;
+        for _ in self.addressee.len()..9 {
+            buf.write_all(b" ")?;
+        }
+
+        buf.write_all(b":")?;
+        buf.write_all(&self.text)?;
+
+        if let Some(id) = &self.id {
+            buf.write_all(b"{")?;
+            buf.write_all(id)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl TryFrom<&[u8]> for AprsMessage {
@@ -27,7 +54,7 @@ impl TryFrom<&[u8]> for AprsMessage {
             return Err(AprsError::InvalidMessageDestination(addressee.to_owned()));
         }
 
-        remove_trailing_spaces(&mut addressee);
+        trim_spaces_end(&mut addressee);
 
         let text = splitter.next().unwrap_or(&[]);
         let mut text_splitter = text.splitn(2, |x| *x == b'{');
@@ -42,33 +69,8 @@ impl TryFrom<&[u8]> for AprsMessage {
     }
 }
 
-impl Display for AprsMessage {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            ":{: <9}:{}",
-            String::from_utf8_lossy(&self.addressee),
-            String::from_utf8_lossy(&self.text)
-        )?;
-
-        if let Some(id) = &self.id {
-            write!(f, "{{{}", String::from_utf8_lossy(id))?;
-        }
-
-        Ok(())
-    }
-}
-
-fn remove_trailing_spaces(arr: &mut Vec<u8>) {
-    let mut space_count = 0;
-
-    for b in arr.iter_mut().rev() {
-        if *b == b' ' {
-            space_count += 1;
-        } else {
-            break;
-        }
-    }
+fn trim_spaces_end(arr: &mut Vec<u8>) {
+    let space_count = arr.iter().rev().take_while(|&&b| b == b' ').count();
 
     arr.truncate(arr.len() - space_count);
 }

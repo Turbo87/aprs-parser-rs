@@ -32,6 +32,8 @@ pub enum EncodeError {
     InvalidLongitude(f32),
     #[error("Invalid Aprs Data")]
     InvalidData,
+    #[error("Invalid Message Addressee: {0:?}")]
+    InvalidMessageAddressee(Vec<u8>),
     #[error(transparent)]
-    Format(#[from] std::io::Error),
+    Write(#[from] std::io::Error),
 }

@@ -21,11 +21,11 @@ impl TryFrom<&[u8]> for AprsPosition {
     type Error = AprsError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        let first = *b.get(0).ok_or_else(|| AprsError::InvalidPosition(vec![]))? as char;
-        let messaging_supported = first == '=' || first == '@';
+        let first = *b.get(0).ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
+        let messaging_supported = first == b'=' || first == b'@';
 
         // parse timestamp if necessary
-        let has_timestamp = first == '@' || first == '/';
+        let has_timestamp = first == b'@' || first == b'/';
         let timestamp = if has_timestamp {
             Some(Timestamp::try_from(&b[1..8])?)
         } else {
@@ -52,7 +52,7 @@ impl TryFrom<&[u8]> for AprsPosition {
         let symbol_table = b[8] as char;
         let symbol_code = b[18] as char;
 
-        let comment = &b[19..b.len()];
+        let comment = &b[19..];
 
         Ok(AprsPosition {
             timestamp,
@@ -78,7 +78,7 @@ impl AprsPosition {
         write!(buf, "{}", sym)?;
 
         if let Some(ts) = &self.timestamp {
-            write!(buf, "{}", ts)?;
+            ts.encode(buf)?;
         }
 
         write!(

@@ -1,8 +1,9 @@
-use std::convert::TryFrom;
-use std::fmt::{Display, Formatter};
-
 use bytes::parse_bytes;
+use std::convert::TryFrom;
+use std::io::Write;
+
 use AprsError;
+use EncodeError;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum Timestamp {
@@ -14,12 +15,28 @@ pub enum Timestamp {
     Unsupported(Vec<u8>),
 }
 
+impl Timestamp {
+    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        match self {
+            Self::DDHHMM(d, h, m) => write!(buf, "{:02}{:02}{:02}z", d, h, m)?,
+            Self::HHMMSS(h, m, s) => write!(buf, "{:02}{:02}{:02}h", h, m, s)?,
+            Self::Unsupported(s) => buf.write_all(s)?,
+        };
+
+        Ok(())
+    }
+}
+
 impl TryFrom<&[u8]> for Timestamp {
     type Error = AprsError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         if b.len() != 7 {
             return Err(AprsError::InvalidTimestamp(b.to_owned()));
+        }
+
+        if b[6] == b'/' {
+            return Ok(Timestamp::Unsupported(b.to_owned()));
         }
 
         let one = parse_bytes(&b[0..2]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
@@ -30,19 +47,8 @@ impl TryFrom<&[u8]> for Timestamp {
         Ok(match b[6] {
             b'z' => Timestamp::DDHHMM(one, two, three),
             b'h' => Timestamp::HHMMSS(one, two, three),
-            b'/' => Timestamp::Unsupported(b.to_owned()),
             _ => return Err(AprsError::InvalidTimestamp(b.to_owned())),
         })
-    }
-}
-
-impl Display for Timestamp {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Self::DDHHMM(d, h, m) => write!(f, "{:02}{:02}{:02}z", d, h, m),
-            Self::HHMMSS(h, m, s) => write!(f, "{:02}{:02}{:02}h", h, m, s),
-            Self::Unsupported(s) => write!(f, "{}", String::from_utf8_lossy(s)),
-        }
     }
 }
 

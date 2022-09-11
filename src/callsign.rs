@@ -24,24 +24,19 @@ impl TryFrom<&[u8]> for Callsign {
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         let s = std::str::from_utf8(b).map_err(|_| AprsError::NonUtf8Callsign(b.to_owned()))?;
 
-        let delimiter = s.find('-');
-        if delimiter.is_none() {
-            return Ok(Callsign::new(s, None));
+        match s.split_once('-') {
+            Some((call, ssid)) => {
+                if call.is_empty() {
+                    Err(AprsError::EmptyCallsign(s.to_owned()))
+                } else if ssid.is_empty() {
+                    Err(AprsError::EmptySSID(s.to_owned()))
+                } else {
+                    Ok(Callsign::new(call, Some(ssid)))
+                }
+            }
+
+            None => Ok(Callsign::new(s, None)),
         }
-
-        let delimiter = delimiter.unwrap();
-        if delimiter == 0 {
-            return Err(AprsError::EmptyCallsign(s.to_owned()));
-        }
-
-        let (call, rest) = s.split_at(delimiter);
-        let ssid = &rest[1..rest.len()];
-
-        if ssid.is_empty() {
-            return Err(AprsError::EmptySSID(s.to_owned()));
-        }
-
-        Ok(Callsign::new(call, Some(ssid)))
     }
 }
 

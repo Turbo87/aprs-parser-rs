@@ -34,16 +34,16 @@ impl TryFrom<&[u8]> for AprsPacket {
         let from = Callsign::try_from(from)?;
 
         let to_and_via = &rest[1..];
-        let to_and_via: Vec<_> = to_and_via.split(|x| *x == b',').collect();
+        let mut to_and_via = to_and_via.split(|x| *x == b',');
 
         let to = to_and_via
-            .first()
+            .next()
             .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
-        let to = Callsign::try_from(*to)?;
+        let to = Callsign::try_from(to)?;
 
         let mut via = vec![];
-        for v in to_and_via.iter().skip(1) {
-            via.push(Callsign::try_from(*v)?);
+        for v in to_and_via {
+            via.push(Callsign::try_from(v)?);
         }
 
         let data = AprsData::try_from(body)?;
@@ -61,7 +61,7 @@ impl AprsPacket {
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         write!(buf, "{}>{}", self.from, self.to)?;
         for v in &self.via {
-            write!(buf, ",{}", v).unwrap();
+            write!(buf, ",{}", v)?;
         }
         write!(buf, ":")?;
         self.data.encode(buf)?;
@@ -96,7 +96,7 @@ impl AprsData {
                 p.encode(buf)?;
             }
             Self::Message(m) => {
-                write!(buf, "{}", m)?;
+                m.encode(buf)?;
             }
             Self::Unknown => return Err(EncodeError::InvalidData),
         }
@@ -176,5 +176,15 @@ mod tests {
                 .unwrap();
             assert_eq!(buf, v.as_bytes())
         }
+    }
+
+    #[test]
+    fn e2e_invalid_string_msg() {
+        let original = b"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has raw bytes that are invalid utf8! \xc3\x28 {32975";
+
+        let mut buf = vec![];
+        let decoded = AprsPacket::try_from(&original[..]).unwrap();
+        decoded.encode(&mut buf).unwrap();
+        assert_eq!(buf, original);
     }
 }
