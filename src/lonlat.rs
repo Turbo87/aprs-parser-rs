@@ -131,40 +131,28 @@ mod tests {
 
     #[test]
     fn test_latitude() {
-        assert_relative_eq!(
-            *Latitude::try_from("4903.50N".as_bytes()).unwrap(),
-            49.05833
-        );
-        assert_relative_eq!(
-            *Latitude::try_from("4903.50S".as_bytes()).unwrap(),
-            -49.05833
-        );
+        assert_relative_eq!(*Latitude::try_from(&b"4903.50N"[..]).unwrap(), 49.05833);
+        assert_relative_eq!(*Latitude::try_from(&b"4903.50S"[..]).unwrap(), -49.05833);
         assert_eq!(
-            Latitude::try_from("4903.50W".as_bytes()),
+            Latitude::try_from(&b"4903.50W"[..]),
             Err(AprsError::InvalidLatitude(b"4903.50W".to_vec()))
         );
         assert_eq!(
-            Latitude::try_from("4903.50E".as_bytes()),
+            Latitude::try_from(&b"4903.50E"[..]),
             Err(AprsError::InvalidLatitude(b"4903.50E".to_vec()))
         );
         assert_eq!(
-            Latitude::try_from("9903.50N".as_bytes()),
+            Latitude::try_from(&b"9903.50N"[..]),
             Err(AprsError::InvalidLatitude(b"9903.50N".to_vec()))
         );
-        assert_relative_eq!(*Latitude::try_from("0000.00N".as_bytes()).unwrap(), 0.0);
-        assert_relative_eq!(*Latitude::try_from("0000.00S".as_bytes()).unwrap(), 0.0);
+        assert_relative_eq!(*Latitude::try_from(&b"0000.00N"[..]).unwrap(), 0.0);
+        assert_relative_eq!(*Latitude::try_from(&b"0000.00S"[..]).unwrap(), 0.0);
     }
 
     #[test]
     fn test_longitude() {
-        assert_relative_eq!(
-            *Longitude::try_from(b"12903.50E".as_slice()).unwrap(),
-            129.05833
-        );
-        assert_relative_eq!(
-            *Longitude::try_from(b"04903.50W".as_slice()).unwrap(),
-            -49.05833
-        );
+        assert_relative_eq!(*Longitude::try_from(&b"12903.50E"[..]).unwrap(), 129.05833);
+        assert_relative_eq!(*Longitude::try_from(&b"04903.50W"[..]).unwrap(), -49.05833);
         assert_eq!(
             Longitude::try_from(&b"04903.50N"[..]),
             Err(AprsError::InvalidLongitude(b"04903.50N".to_vec()))
