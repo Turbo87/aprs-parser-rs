@@ -1,5 +1,7 @@
+use std::convert::TryFrom;
 use std::ops::Deref;
-use std::str::FromStr;
+
+use bytes::parse_bytes;
 use AprsError;
 use EncodeError;
 
@@ -14,37 +16,33 @@ impl Deref for Latitude {
     }
 }
 
-impl FromStr for Latitude {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for Latitude {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = s.as_bytes();
-
-        if b.len() != 8 || b[4] as char != '.' {
-            return Err(Self::Err::InvalidLatitude(s.to_owned()));
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        if b.len() != 8 || b[4] != b'.' {
+            return Err(Self::Error::InvalidLatitude(b.to_owned()));
         }
 
-        let north = match b[7] as char {
-            'N' => true,
-            'S' => false,
-            _ => return Err(Self::Err::InvalidLatitude(s.to_owned())),
+        let north = match b[7] {
+            b'N' => true,
+            b'S' => false,
+            _ => return Err(Self::Error::InvalidLatitude(b.to_owned())),
         };
 
-        let deg = s[0..2]
-            .parse::<u32>()
-            .map_err(|_| Self::Err::InvalidLatitude(s.to_owned()))? as f32;
-        let min = s[2..4]
-            .parse::<u32>()
-            .map_err(|_| Self::Err::InvalidLatitude(s.to_owned()))? as f32;
-        let min_frac = s[5..7]
-            .parse::<u32>()
-            .map_err(|_| Self::Err::InvalidLatitude(s.to_owned()))? as f32;
+        let deg = parse_bytes::<u32>(&b[0..2])
+            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))? as f32;
+        let min = parse_bytes::<u32>(&b[2..4])
+            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))? as f32;
+        let min_frac = parse_bytes::<u32>(&b[5..7])
+            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))?
+            as f32;
 
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if north { value } else { -value };
 
         if value > 90. || value < -90. {
-            return Err(Self::Err::InvalidLatitude(s.to_owned()));
+            return Err(Self::Error::InvalidLatitude(b.to_owned()));
         }
 
         Ok(Self(value))
@@ -62,37 +60,33 @@ impl Deref for Longitude {
     }
 }
 
-impl FromStr for Longitude {
-    type Err = AprsError;
+impl TryFrom<&[u8]> for Longitude {
+    type Error = AprsError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = s.as_bytes();
-
-        if b.len() != 9 || b[5] as char != '.' {
-            return Err(Self::Err::InvalidLongitude(s.to_owned()));
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        if b.len() != 9 || b[5] != b'.' {
+            return Err(Self::Error::InvalidLongitude(b.to_owned()));
         }
 
-        let east = match b[8] as char {
-            'E' => true,
-            'W' => false,
-            _ => return Err(Self::Err::InvalidLongitude(s.to_owned())),
+        let east = match b[8] {
+            b'E' => true,
+            b'W' => false,
+            _ => return Err(Self::Error::InvalidLongitude(b.to_owned())),
         };
 
-        let deg = s[0..3]
-            .parse::<u32>()
-            .map_err(|_| Self::Err::InvalidLongitude(s.to_owned()))? as f32;
-        let min = s[3..5]
-            .parse::<u32>()
-            .map_err(|_| Self::Err::InvalidLongitude(s.to_owned()))? as f32;
-        let min_frac = s[6..8]
-            .parse::<u32>()
-            .map_err(|_| Self::Err::InvalidLongitude(s.to_owned()))? as f32;
+        let deg = parse_bytes::<u32>(&b[0..3])
+            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))? as f32;
+        let min = parse_bytes::<u32>(&b[3..5])
+            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))? as f32;
+        let min_frac = parse_bytes::<u32>(&b[6..8])
+            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))?
+            as f32;
 
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if east { value } else { -value };
 
         if value > 180. || value < -180. {
-            return Err(Self::Err::InvalidLongitude(s.to_owned()));
+            return Err(Self::Error::InvalidLongitude(b.to_owned()));
         }
 
         Ok(Self(value))
@@ -137,86 +131,89 @@ mod tests {
 
     #[test]
     fn test_latitude() {
-        assert_relative_eq!(*"4903.50N".parse::<Latitude>().unwrap(), 49.05833);
-        assert_relative_eq!(*"4903.50S".parse::<Latitude>().unwrap(), -49.05833);
+        assert_relative_eq!(*Latitude::try_from(&b"4903.50N"[..]).unwrap(), 49.05833);
+        assert_relative_eq!(*Latitude::try_from(&b"4903.50S"[..]).unwrap(), -49.05833);
         assert_eq!(
-            "4903.50W".parse::<Latitude>(),
-            Err(AprsError::InvalidLatitude("4903.50W".to_owned()))
+            Latitude::try_from(&b"4903.50W"[..]),
+            Err(AprsError::InvalidLatitude(b"4903.50W".to_vec()))
         );
         assert_eq!(
-            "4903.50E".parse::<Latitude>(),
-            Err(AprsError::InvalidLatitude("4903.50E".to_owned()))
+            Latitude::try_from(&b"4903.50E"[..]),
+            Err(AprsError::InvalidLatitude(b"4903.50E".to_vec()))
         );
         assert_eq!(
-            "9903.50N".parse::<Latitude>(),
-            Err(AprsError::InvalidLatitude("9903.50N".to_owned()))
+            Latitude::try_from(&b"9903.50N"[..]),
+            Err(AprsError::InvalidLatitude(b"9903.50N".to_vec()))
         );
-        assert_relative_eq!(*"0000.00N".parse::<Latitude>().unwrap(), 0.0);
-        assert_relative_eq!(*"0000.00S".parse::<Latitude>().unwrap(), 0.0);
+        assert_relative_eq!(*Latitude::try_from(&b"0000.00N"[..]).unwrap(), 0.0);
+        assert_relative_eq!(*Latitude::try_from(&b"0000.00S"[..]).unwrap(), 0.0);
     }
 
     #[test]
     fn test_longitude() {
-        assert_relative_eq!(*"12903.50E".parse::<Longitude>().unwrap(), 129.05833);
-        assert_relative_eq!(*"04903.50W".parse::<Longitude>().unwrap(), -49.05833);
+        assert_relative_eq!(*Longitude::try_from(&b"12903.50E"[..]).unwrap(), 129.05833);
+        assert_relative_eq!(*Longitude::try_from(&b"04903.50W"[..]).unwrap(), -49.05833);
         assert_eq!(
-            "04903.50N".parse::<Longitude>(),
-            Err(AprsError::InvalidLongitude("04903.50N".to_owned()))
+            Longitude::try_from(&b"04903.50N"[..]),
+            Err(AprsError::InvalidLongitude(b"04903.50N".to_vec()))
         );
         assert_eq!(
-            "04903.50S".parse::<Longitude>(),
-            Err(AprsError::InvalidLongitude("04903.50S".to_owned()))
+            Longitude::try_from(&b"04903.50S"[..]),
+            Err(AprsError::InvalidLongitude(b"04903.50S".to_vec()))
         );
         assert_eq!(
-            "18903.50E".parse::<Longitude>(),
-            Err(AprsError::InvalidLongitude("18903.50E".to_owned()))
+            Longitude::try_from(&b"18903.50E"[..]),
+            Err(AprsError::InvalidLongitude(b"18903.50E".to_vec()))
         );
-        assert_relative_eq!(*"00000.00E".parse::<Longitude>().unwrap(), 0.0);
-        assert_relative_eq!(*"00000.00W".parse::<Longitude>().unwrap(), 0.0);
+        assert_relative_eq!(*Longitude::try_from(&b"00000.00E"[..]).unwrap(), 0.0);
+        assert_relative_eq!(*Longitude::try_from(&b"00000.00W"[..]).unwrap(), 0.0);
     }
 
     #[test]
     fn test_encode_latitude() {
         assert_eq!(
-            encode_latitude(Latitude(49.05833)),
-            Ok("4903.50N".to_string())
+            encode_latitude(Latitude(49.05833)).unwrap(),
+            "4903.50N".to_string()
         );
         assert_eq!(
-            encode_latitude(Latitude(-49.05833)),
-            Ok("4903.50S".to_string())
+            encode_latitude(Latitude(-49.05833)).unwrap(),
+            "4903.50S".to_string()
         );
-        assert_eq!(
+        assert!(matches!(
             encode_latitude(Latitude(-90.1)),
-            Err(EncodeError::InvalidLatitude(-90.1))
-        );
-        assert_eq!(
+            Err(EncodeError::InvalidLatitude(x)) if x == -90.1
+        ));
+        assert!(matches!(
             encode_latitude(Latitude(90.1)),
-            Err(EncodeError::InvalidLatitude(90.1))
+            Err(EncodeError::InvalidLatitude(x)) if x == 90.1
+        ));
+        assert_eq!(
+            encode_latitude(Latitude(0.0)).unwrap(),
+            "0000.00N".to_string()
         );
-        assert_eq!(encode_latitude(Latitude(0.0)), Ok("0000.00N".to_string()));
     }
 
     #[test]
     fn test_encode_longitude() {
         assert_eq!(
-            encode_longitude(Longitude(129.05833)),
-            Ok("12903.50E".to_string())
+            encode_longitude(Longitude(129.05833)).unwrap(),
+            "12903.50E".to_string()
         );
         assert_eq!(
-            encode_longitude(Longitude(-49.05833)),
-            Ok("04903.50W".to_string())
+            encode_longitude(Longitude(-49.05833)).unwrap(),
+            "04903.50W".to_string()
         );
-        assert_eq!(
+        assert!(matches!(
             encode_longitude(Longitude(-180.1)),
-            Err(EncodeError::InvalidLongitude(-180.1))
-        );
-        assert_eq!(
+            Err(EncodeError::InvalidLongitude(x)) if x == -180.1
+        ));
+        assert!(matches!(
             encode_longitude(Longitude(180.1)),
-            Err(EncodeError::InvalidLongitude(180.1))
-        );
+            Err(EncodeError::InvalidLongitude(x)) if x == 180.1
+        ));
         assert_eq!(
-            encode_longitude(Longitude(0.0)),
-            Ok("00000.00E".to_string())
+            encode_longitude(Longitude(0.0)).unwrap(),
+            "00000.00E".to_string()
         );
     }
 }
