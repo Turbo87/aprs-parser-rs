@@ -95,4 +95,27 @@ mod tests {
             Err(AprsError::InvalidTimestamp(b"123a56z".to_vec()))
         );
     }
+
+    #[test]
+    fn encode_ddhhmm() {
+        let mut buf = vec![];
+        Timestamp::DDHHMM(65, 43, 21).encode(&mut buf).unwrap();
+        assert_eq!(b"654321z"[..], buf);
+    }
+
+    #[test]
+    fn encode_hhmmss() {
+        let mut buf = vec![];
+        Timestamp::HHMMSS(65, 43, 21).encode(&mut buf).unwrap();
+        assert_eq!(b"654321h"[..], buf);
+    }
+
+    #[test]
+    fn encode_local_time() {
+        let mut buf = vec![];
+        Timestamp::Unsupported(b"135a67z".to_vec())
+            .encode(&mut buf)
+            .unwrap();
+        assert_eq!(b"135a67z"[..], buf);
+    }
 }

@@ -88,4 +88,25 @@ mod tests {
             Err(AprsError::EmptySSID("ABCDEF-".to_owned()))
         );
     }
+
+    #[test]
+    fn non_utf8() {
+        assert_eq!(
+            Callsign::try_from(&b"ABCDEF\xF0\xA4\xAD"[..]),
+            Err(AprsError::NonUtf8Callsign(b"ABCDEF\xF0\xA4\xAD".to_vec()))
+        );
+    }
+
+    #[test]
+    fn display_no_ssid() {
+        assert_eq!("ABCDEF", format!("{}", Callsign::new("ABCDEF", None)));
+    }
+
+    #[test]
+    fn display_with_ssid() {
+        assert_eq!(
+            "ABCDEF-12",
+            format!("{}", Callsign::new("ABCDEF", Some("12")))
+        );
+    }
 }

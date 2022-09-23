@@ -88,3 +88,18 @@ pub use timestamp::Timestamp;
 pub fn parse(b: &[u8]) -> Result<AprsPacket, AprsError> {
     AprsPacket::try_from(b)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overall() {
+        let original =
+            &b"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {3a2B975"[..];
+
+        let mut buf = vec![];
+        parse(original).unwrap().encode(&mut buf).unwrap();
+        assert_eq!(original, &buf);
+    }
+}
