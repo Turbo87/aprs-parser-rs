@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::ops::Deref;
 
+use base91;
 use bytes::parse_bytes;
 use AprsError;
 use EncodeError;
@@ -49,6 +50,19 @@ impl TryFrom<&[u8]> for Latitude {
     }
 }
 
+impl Latitude {
+    pub(crate) fn from_compressed_ascii(b: &[u8]) -> Result<Self, AprsError> {
+        let value = 90.0
+            - (base91::decode_ascii(b).ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?
+                / 380926.0);
+        if value > 90. || value < -90. {
+            return Err(AprsError::InvalidLatitude(b.to_owned()));
+        }
+
+        Ok(Self(value))
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default)]
 pub struct Longitude(f32);
 
@@ -87,6 +101,20 @@ impl TryFrom<&[u8]> for Longitude {
 
         if value > 180. || value < -180. {
             return Err(Self::Error::InvalidLongitude(b.to_owned()));
+        }
+
+        Ok(Self(value))
+    }
+}
+
+impl Longitude {
+    pub(crate) fn from_compressed_ascii(b: &[u8]) -> Result<Self, AprsError> {
+        let value = (base91::decode_ascii(b)
+            .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))?
+            / 190463.0)
+            - 180.0;
+        if value > 180. || value < -180. {
+            return Err(AprsError::InvalidLongitude(b.to_owned()));
         }
 
         Ok(Self(value))

@@ -108,7 +108,7 @@ impl From<u8> for AprsCompressionType {
         let origin = (
             byte & (1 << 2) != 0,
             byte & (1 << 1) != 0,
-            byte & (0 << 1) != 0,
+            byte & (1 << 0) != 0,
         );
 
         Self {

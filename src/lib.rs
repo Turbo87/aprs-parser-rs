@@ -66,6 +66,7 @@ extern crate thiserror;
 #[macro_use]
 extern crate approx;
 
+mod base91;
 mod bytes;
 mod callsign;
 mod compression_type;
@@ -79,6 +80,7 @@ mod timestamp;
 use std::convert::TryFrom;
 
 pub use callsign::Callsign;
+pub use compression_type::AprsCompressionType;
 pub use error::{AprsError, EncodeError};
 pub use lonlat::{Latitude, Longitude};
 pub use message::AprsMessage;
