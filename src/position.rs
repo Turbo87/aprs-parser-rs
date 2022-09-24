@@ -15,6 +15,13 @@ pub struct AprsPosition {
     pub symbol_table: char,
     pub symbol_code: char,
     pub comment: Vec<u8>,
+    pub encoding: AprsPositionType,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum AprsPositionType {
+    // Compressed(Option<AprsCompressionType>), // todo
+    Uncompressed,
 }
 
 impl TryFrom<&[u8]> for AprsPosition {
@@ -44,6 +51,16 @@ impl TryFrom<&[u8]> for AprsPosition {
             return Err(AprsError::UnsupportedPositionFormat(b.to_owned()));
         }
 
+        Self::parse_uncompressed(b, timestamp, messaging_supported)
+    }
+}
+
+impl AprsPosition {
+    fn parse_uncompressed(
+        b: &[u8],
+        timestamp: Option<Timestamp>,
+        messaging_supported: bool,
+    ) -> Result<Self, AprsError> {
         if b.len() < 19 {
             return Err(AprsError::InvalidPosition(b.to_owned()));
         }
@@ -57,7 +74,7 @@ impl TryFrom<&[u8]> for AprsPosition {
 
         let comment = &b[19..];
 
-        Ok(AprsPosition {
+        Ok(Self {
             timestamp,
             messaging_supported,
             latitude,
@@ -65,12 +82,17 @@ impl TryFrom<&[u8]> for AprsPosition {
             symbol_table,
             symbol_code,
             comment: comment.to_owned(),
+            encoding: AprsPositionType::Uncompressed,
         })
     }
-}
 
-impl AprsPosition {
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        match self.encoding {
+            AprsPositionType::Uncompressed => self.encode_uncompressed(buf),
+        }
+    }
+
+    pub fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let sym = match (self.timestamp.is_some(), self.messaging_supported) {
             (true, true) => '@',
             (true, false) => '/',
@@ -103,12 +125,76 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parse_compressed_without_timestamp_or_messaging() {
+        let result = AprsPosition::try_from(&b"!/ABCD#$%^- >C"[..]).unwrap();
+
+        assert_eq!(result.timestamp, None);
+        assert!(!result.messaging_supported);
+        assert_relative_eq!(*result.latitude, 25.970047);
+        assert_relative_eq!(*result.longitude, -171.95428);
+        assert_eq!(result.symbol_table, '/');
+        assert_eq!(result.symbol_code, '-');
+        assert_eq!(result.comment, []);
+    }
+
+    #[test]
+    fn parse_compressed_with_comment() {
+        let result = AprsPosition::try_from(&b"!/ABCD#$%^- >CHello/A=001000"[..]).unwrap();
+
+        assert_eq!(result.timestamp, None);
+        assert_relative_eq!(*result.latitude, 25.970047);
+        assert_relative_eq!(*result.longitude, -171.95428);
+        assert_eq!(result.symbol_table, '/');
+        assert_eq!(result.symbol_code, '-');
+        assert_eq!(result.comment, b"Hello/A=001000");
+    }
+
+    #[test]
+    fn parse_compressed_with_timestamp_without_messaging() {
+        let result = AprsPosition::try_from(&b"//ABCD#$%^- >C322/103/A=001000"[..]).unwrap();
+
+        assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
+        assert!(!result.messaging_supported);
+        assert_relative_eq!(*result.latitude, 25.970047);
+        assert_relative_eq!(*result.longitude, -171.95428);
+        assert_eq!(result.symbol_table, '\\');
+        assert_eq!(result.symbol_code, '^');
+        assert_eq!(result.comment, b"322/103/A=003054");
+    }
+
+    #[test]
+    fn parse_compressed_without_timestamp_with_messaging() {
+        let result = AprsPosition::try_from(&b"=ABCD#$%^- >C"[..]).unwrap();
+
+        assert_eq!(result.timestamp, None);
+        assert!(result.messaging_supported);
+        assert_relative_eq!(*result.latitude, 25.970047);
+        assert_relative_eq!(*result.longitude, -171.95428);
+        assert_eq!(result.symbol_table, '/');
+        assert_eq!(result.symbol_code, '-');
+        assert_eq!(result.comment, []);
+    }
+
+    #[test]
+    fn parse_compressed_with_timestamp_and_messaging() {
+        let result = AprsPosition::try_from(&b"@074849h/ABCD#$%^- >C"[..]).unwrap();
+
+        assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
+        assert!(result.messaging_supported);
+        assert_relative_eq!(*result.latitude, 25.970047);
+        assert_relative_eq!(*result.longitude, -171.95428);
+        assert_eq!(result.symbol_table, '\\');
+        assert_eq!(result.symbol_code, '^');
+        assert_eq!(result.comment, b"322/103/A=003054");
+    }
+
+    #[test]
     fn parse_without_timestamp_or_messaging() {
         let result = AprsPosition::try_from(&b"!4903.50N/07201.75W-"[..]).unwrap();
         assert_eq!(result.timestamp, None);
         assert!(!result.messaging_supported);
-        assert_relative_eq!(*result.latitude, 49.05833);
-        assert_relative_eq!(*result.longitude, -72.02916);
+        assert_relative_eq!(*result.latitude, 25.970047);
+        assert_relative_eq!(*result.longitude, -171.95428);
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, []);
