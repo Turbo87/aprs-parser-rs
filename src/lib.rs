@@ -68,6 +68,7 @@ extern crate approx;
 
 mod bytes;
 mod callsign;
+mod compression_type;
 mod error;
 mod lonlat;
 mod message;
