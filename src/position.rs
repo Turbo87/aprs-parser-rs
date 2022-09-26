@@ -27,7 +27,10 @@ impl TryFrom<&[u8]> for AprsPosition {
         // parse timestamp if necessary
         let has_timestamp = first == b'@' || first == b'/';
         let timestamp = if has_timestamp {
-            Some(Timestamp::try_from(&b[1..8])?)
+            Some(Timestamp::try_from(
+                b.get(1..8)
+                    .ok_or_else(|| AprsError::InvalidPosition(b.to_vec()))?,
+            )?)
         } else {
             None
         };
