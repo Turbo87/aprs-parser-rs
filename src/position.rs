@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::io::Write;
 
-use lonlat::{encode_latitude, encode_longitude, Latitude, Longitude};
+use lonlat::{Latitude, Longitude};
 use AprsCompressedCs;
 use AprsCompressionType;
 use AprsError;
@@ -73,8 +73,8 @@ impl AprsPosition {
         let course_speed = &b[10..12];
         let comp_type = b[12];
 
-        let latitude = Latitude::from_compressed_ascii(comp_lat)?;
-        let longitude = Longitude::from_compressed_ascii(comp_lon)?;
+        let latitude = Latitude::parse_compressed(comp_lat)?;
+        let longitude = Longitude::parse_compressed(comp_lon)?;
 
         // From the APRS spec - if the c value is a space,
         // the csT doesn't matter
@@ -114,8 +114,8 @@ impl AprsPosition {
         }
 
         // parse position
-        let latitude = Latitude::try_from(&b[0..8])?;
-        let longitude = Longitude::try_from(&b[9..18])?;
+        let latitude = Latitude::parse_uncompressed(&b[0..8])?;
+        let longitude = Longitude::parse_uncompressed(&b[9..18])?;
 
         let symbol_table = b[8] as char;
         let symbol_code = b[18] as char;
@@ -155,14 +155,11 @@ impl AprsPosition {
     }
 
     pub fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        write!(
-            buf,
-            "{}{}{}{}",
-            encode_latitude(self.latitude)?,
-            self.symbol_table,
-            encode_longitude(self.longitude)?,
-            self.symbol_code,
-        )?;
+        self.latitude.encode_uncompressed(buf)?;
+        write!(buf, "{}", self.symbol_table)?;
+        self.longitude.encode_uncompressed(buf)?;
+        write!(buf, "{}", self.symbol_code)?;
+
         buf.write_all(&self.comment)?;
 
         Ok(())
@@ -175,8 +172,8 @@ impl AprsPosition {
     ) -> Result<(), EncodeError> {
         write!(buf, "{}", self.symbol_table)?;
 
-        self.latitude.to_compressed_ascii(buf)?;
-        self.longitude.to_compressed_ascii(buf)?;
+        self.latitude.encode_compressed(buf)?;
+        self.longitude.encode_compressed(buf)?;
 
         write!(buf, "{}", self.symbol_code)?;
 
