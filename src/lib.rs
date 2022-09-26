@@ -69,6 +69,7 @@ extern crate approx;
 mod base91;
 mod bytes;
 mod callsign;
+mod compressed_cs;
 mod compression_type;
 mod error;
 mod lonlat;
@@ -80,6 +81,7 @@ mod timestamp;
 use std::convert::TryFrom;
 
 pub use callsign::Callsign;
+pub use compressed_cs::{AprsAltitude, AprsCompressedCs, AprsCourseSpeed, AprsRadioRange};
 pub use compression_type::AprsCompressionType;
 pub use error::{AprsError, EncodeError};
 pub use lonlat::{Latitude, Longitude};

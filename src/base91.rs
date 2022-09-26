@@ -1,8 +1,31 @@
-pub fn encode_ascii(val: f32) -> Vec<u8> {
-    todo!(); // TODO this should take in a writer
+use std::io::Write;
+
+use EncodeError;
+
+pub fn encode_ascii<W: Write>(val: f64, buf: &mut W, padding: usize) -> Result<(), EncodeError> {
+    let mut val = val.round();
+    let mut digit_buf = vec![];
+
+    while val > 1.0 {
+        let x = val % 91.0;
+        val /= 91.0;
+
+        // APRS standard - add 33
+        digit_buf.push(x as u8 + 33);
+    }
+
+    // pad with zeroes, plus 33
+    for _ in digit_buf.len()..padding {
+        buf.write(&[33])?;
+    }
+
+    digit_buf.reverse();
+    buf.write_all(&digit_buf)?;
+
+    Ok(())
 }
 
-pub fn decode_ascii(bytes: &[u8]) -> Option<f32> {
+pub fn decode_ascii(bytes: &[u8]) -> Option<f64> {
     let mut val = 0.0;
 
     for b in bytes {
@@ -12,11 +35,7 @@ pub fn decode_ascii(bytes: &[u8]) -> Option<f32> {
         val *= 91.0;
         val += x as f64;
     }
-
-    // Need to do this as f64 and then cast
-    // If we keep f32 the whole way, the
-    // errors will stack up quickly
-    Some(val as f32)
+    Some(val)
 }
 
 #[cfg(test)]
@@ -28,7 +47,29 @@ mod tests {
         let val = 20427156.0;
         let expected = &b"<*e7"[..];
 
-        assert_eq!(expected, encode_ascii(val));
+        let mut buf = vec![];
+        encode_ascii(val, &mut buf, 4).unwrap();
+        assert_eq!(expected, buf);
+    }
+
+    #[test]
+    fn encode_with_padding() {
+        let val = 20427156.0;
+        let expected = &b"!!!!<*e7"[..];
+
+        let mut buf = vec![];
+        encode_ascii(val, &mut buf, 8).unwrap();
+        assert_eq!(expected, buf);
+    }
+
+    #[test]
+    fn encode_with_under_padding() {
+        let val = 20427156.0;
+        let expected = &b"<*e7"[..];
+
+        let mut buf = vec![];
+        encode_ascii(val, &mut buf, 1).unwrap();
+        assert_eq!(expected, buf);
     }
 
     #[test]
@@ -37,5 +78,17 @@ mod tests {
         let expected = 20427156.0;
 
         assert_eq!(Some(expected), decode_ascii(ascii));
+    }
+
+    #[test]
+    fn test_edge_case() {
+        let ascii = &b"#$%^"[..];
+        let num = 1532410.0;
+
+        assert_eq!(num, decode_ascii(ascii).unwrap());
+
+        let mut buf = vec![];
+        encode_ascii(num, &mut buf, 4).unwrap();
+        assert_eq!(ascii, buf);
     }
 }

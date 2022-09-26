@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::io::Write;
 use std::ops::Deref;
 
 use base91;
@@ -7,10 +8,10 @@ use AprsError;
 use EncodeError;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default)]
-pub struct Latitude(f32);
+pub struct Latitude(f64);
 
 impl Deref for Latitude {
-    type Target = f32;
+    type Target = f64;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -32,12 +33,12 @@ impl TryFrom<&[u8]> for Latitude {
         };
 
         let deg = parse_bytes::<u32>(&b[0..2])
-            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))? as f32;
+            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))? as f64;
         let min = parse_bytes::<u32>(&b[2..4])
-            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))? as f32;
+            .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))? as f64;
         let min_frac = parse_bytes::<u32>(&b[5..7])
             .ok_or_else(|| Self::Error::InvalidLatitude(b.to_owned()))?
-            as f32;
+            as f64;
 
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if north { value } else { -value };
@@ -61,13 +62,18 @@ impl Latitude {
 
         Ok(Self(value))
     }
+
+    pub(crate) fn to_compressed_ascii<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        let value = (90.0 - self.0) * 380926.0;
+        base91::encode_ascii(value, buf, 4)
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default)]
-pub struct Longitude(f32);
+pub struct Longitude(f64);
 
 impl Deref for Longitude {
-    type Target = f32;
+    type Target = f64;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -89,12 +95,12 @@ impl TryFrom<&[u8]> for Longitude {
         };
 
         let deg = parse_bytes::<u32>(&b[0..3])
-            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))? as f32;
+            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))? as f64;
         let min = parse_bytes::<u32>(&b[3..5])
-            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))? as f32;
+            .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))? as f64;
         let min_frac = parse_bytes::<u32>(&b[6..8])
             .ok_or_else(|| Self::Error::InvalidLongitude(b.to_owned()))?
-            as f32;
+            as f64;
 
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if east { value } else { -value };
@@ -119,6 +125,11 @@ impl Longitude {
 
         Ok(Self(value))
     }
+
+    pub(crate) fn to_compressed_ascii<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        let value = (180.0 + self.0) * 190463.0;
+        base91::encode_ascii(value, buf, 4)
+    }
 }
 
 pub fn encode_latitude(lat: Latitude) -> Result<String, EncodeError> {
@@ -131,8 +142,8 @@ pub fn encode_latitude(lat: Latitude) -> Result<String, EncodeError> {
     let (dir, lat) = if lat >= 0.0 { ('N', lat) } else { ('S', -lat) };
 
     let deg = lat as u32;
-    let min = ((lat - (deg as f32)) * 60.0) as u32;
-    let min_frac = ((lat - (deg as f32) - (min as f32 / 60.0)) * 6000.0).round() as u32;
+    let min = ((lat - (deg as f64)) * 60.0) as u32;
+    let min_frac = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
 
     Ok(format!("{:02}{:02}.{:02}{}", deg, min, min_frac, dir))
 }
@@ -147,8 +158,8 @@ pub fn encode_longitude(lon: Longitude) -> Result<String, EncodeError> {
     let (dir, lon) = if lon >= 0.0 { ('E', lon) } else { ('W', -lon) };
 
     let deg = lon as u32;
-    let min = ((lon - (deg as f32)) * 60.0) as u32;
-    let min_frac = ((lon - (deg as f32) - (min as f32 / 60.0)) * 6000.0).round() as u32;
+    let min = ((lon - (deg as f64)) * 60.0) as u32;
+    let min_frac = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
 
     Ok(format!("{:03}{:02}.{:02}{}", deg, min, min_frac, dir))
 }
@@ -159,8 +170,14 @@ mod tests {
 
     #[test]
     fn test_latitude() {
-        assert_relative_eq!(*Latitude::try_from(&b"4903.50N"[..]).unwrap(), 49.05833);
-        assert_relative_eq!(*Latitude::try_from(&b"4903.50S"[..]).unwrap(), -49.05833);
+        assert_relative_eq!(
+            *Latitude::try_from(&b"4903.50N"[..]).unwrap(),
+            49.05833333333333
+        );
+        assert_relative_eq!(
+            *Latitude::try_from(&b"4903.50S"[..]).unwrap(),
+            -49.05833333333333
+        );
         assert_eq!(
             Latitude::try_from(&b"4903.50W"[..]),
             Err(AprsError::InvalidLatitude(b"4903.50W".to_vec()))
@@ -179,8 +196,14 @@ mod tests {
 
     #[test]
     fn test_longitude() {
-        assert_relative_eq!(*Longitude::try_from(&b"12903.50E"[..]).unwrap(), 129.05833);
-        assert_relative_eq!(*Longitude::try_from(&b"04903.50W"[..]).unwrap(), -49.05833);
+        assert_relative_eq!(
+            *Longitude::try_from(&b"12903.50E"[..]).unwrap(),
+            129.05833333333333
+        );
+        assert_relative_eq!(
+            *Longitude::try_from(&b"04903.50W"[..]).unwrap(),
+            -49.0583333333333333
+        );
         assert_eq!(
             Longitude::try_from(&b"04903.50N"[..]),
             Err(AprsError::InvalidLongitude(b"04903.50N".to_vec()))

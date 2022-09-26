@@ -22,18 +22,22 @@ pub enum AprsError {
     InvalidMessageDestination(Vec<u8>),
     #[error("Invalid Message ID: {0:?}")]
     InvalidMessageId(Vec<u8>),
+    #[error("Invalid Compressed cs: {0:?}")]
+    InvalidCs([u8; 2]),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum EncodeError {
     #[error("Invalid Latitude: {0}")]
-    InvalidLatitude(f32),
+    InvalidLatitude(f64),
     #[error("Invalid Longitude: {0}")]
-    InvalidLongitude(f32),
+    InvalidLongitude(f64),
     #[error("Invalid Aprs Data")]
     InvalidData,
     #[error("Invalid Message Addressee: {0:?}")]
     InvalidMessageAddressee(Vec<u8>),
+    #[error("Compressed altitude requires the nmea source to be gga")]
+    NonGgaAltitude,
     #[error(transparent)]
     Write(#[from] std::io::Error),
 }

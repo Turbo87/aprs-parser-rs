@@ -123,8 +123,8 @@ mod tests {
         match result.data {
             AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-                assert_relative_eq!(*position.latitude, 48.360166);
-                assert_relative_eq!(*position.longitude, 12.408166);
+                assert_relative_eq!(*position.latitude, 48.36016666666667);
+                assert_relative_eq!(*position.longitude, 12.408166666666666);
                 assert_eq!(
                     position.comment,
                     b"322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
