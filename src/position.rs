@@ -17,12 +17,16 @@ pub struct AprsPosition {
     pub symbol_table: char,
     pub symbol_code: char,
     pub comment: Vec<u8>,
-    pub extra: PositionExtra,
+    pub cst: AprsCst,
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum PositionExtra {
-    Compressed(Option<(AprsCompressedCs, AprsCompressionType)>),
+pub enum AprsCst {
+    CompressedSome {
+        cs: AprsCompressedCs,
+        t: AprsCompressionType,
+    },
+    CompressedNone,
     Uncompressed,
 }
 
@@ -79,14 +83,14 @@ impl AprsPosition {
         // From the APRS spec - if the c value is a space,
         // the csT doesn't matter
         let cst = match course_speed[0] {
-            b' ' => None,
+            b' ' => AprsCst::CompressedNone,
             _ => {
                 let t = comp_type
                     .checked_sub(33)
                     .ok_or_else(|| AprsError::InvalidPosition(b.to_owned()))?
                     .into();
                 let cs = AprsCompressedCs::parse(course_speed[0], course_speed[1], t)?;
-                Some((cs, t))
+                AprsCst::CompressedSome { cs, t }
             }
         };
 
@@ -100,7 +104,7 @@ impl AprsPosition {
             symbol_table,
             symbol_code,
             comment,
-            extra: PositionExtra::Compressed(cst),
+            cst,
         })
     }
 
@@ -130,7 +134,7 @@ impl AprsPosition {
             symbol_table,
             symbol_code,
             comment,
-            extra: PositionExtra::Uncompressed,
+            cst: AprsCst::Uncompressed,
         })
     }
 
@@ -148,9 +152,10 @@ impl AprsPosition {
             ts.encode(buf)?;
         }
 
-        match self.extra {
-            PositionExtra::Uncompressed => self.encode_uncompressed(buf),
-            PositionExtra::Compressed(data) => self.encode_compressed(buf, data),
+        match self.cst {
+            AprsCst::Uncompressed => self.encode_uncompressed(buf),
+            AprsCst::CompressedSome { cs, t } => self.encode_compressed(buf, Some((cs, t))),
+            AprsCst::CompressedNone => self.encode_compressed(buf, None),
         }
     }
 
@@ -209,7 +214,7 @@ mod tests {
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, []);
-        assert_eq!(result.extra, PositionExtra::Compressed(None));
+        assert_eq!(result.cst, AprsCst::CompressedNone);
     }
 
     #[test]
@@ -223,15 +228,15 @@ mod tests {
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, b"Hello/A=001000");
         assert_eq!(
-            result.extra,
-            PositionExtra::Compressed(Some((
-                AprsCompressedCs::CourseSpeed(AprsCourseSpeed::new(220, 8.317274897290226,)),
-                AprsCompressionType {
+            result.cst,
+            AprsCst::CompressedSome {
+                cs: AprsCompressedCs::CourseSpeed(AprsCourseSpeed::new(220, 8.317274897290226,)),
+                t: AprsCompressionType {
                     gps_fix: GpsFix::Current,
                     nmea_source: NmeaSource::Other,
                     origin: Origin::Tbd,
                 }
-            )))
+            }
         );
     }
 
@@ -248,15 +253,15 @@ mod tests {
         assert_eq!(result.symbol_code, '^');
         assert_eq!(result.comment, b"322/103/A=003054");
         assert_eq!(
-            result.extra,
-            PositionExtra::Compressed(Some((
-                AprsCompressedCs::RadioRange(AprsRadioRange::new(20.12531377814689)),
-                AprsCompressionType {
+            result.cst,
+            AprsCst::CompressedSome {
+                cs: AprsCompressedCs::RadioRange(AprsRadioRange::new(20.12531377814689)),
+                t: AprsCompressionType {
                     gps_fix: GpsFix::Current,
                     nmea_source: NmeaSource::Other,
                     origin: Origin::Software,
                 }
-            )))
+            }
         );
     }
 
@@ -272,15 +277,15 @@ mod tests {
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, []);
         assert_eq!(
-            result.extra,
-            PositionExtra::Compressed(Some((
-                AprsCompressedCs::Altitude(AprsAltitude::new(10004.520050700292)),
-                AprsCompressionType {
+            result.cst,
+            AprsCst::CompressedSome {
+                cs: AprsCompressedCs::Altitude(AprsAltitude::new(10004.520050700292)),
+                t: AprsCompressionType {
                     gps_fix: GpsFix::Old,
                     nmea_source: NmeaSource::Gga,
                     origin: Origin::Compressed,
                 }
-            )))
+            }
         );
     }
 
@@ -296,7 +301,7 @@ mod tests {
         assert_eq!(result.symbol_table, '\\');
         assert_eq!(result.symbol_code, '^');
         assert_eq!(result.comment, b"322/103/A=003054");
-        assert_eq!(result.extra, PositionExtra::Compressed(None));
+        assert_eq!(result.cst, AprsCst::CompressedNone);
     }
 
     #[test]
@@ -309,7 +314,7 @@ mod tests {
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, []);
-        assert_eq!(result.extra, PositionExtra::Uncompressed);
+        assert_eq!(result.cst, AprsCst::Uncompressed);
     }
 
     #[test]
@@ -321,7 +326,7 @@ mod tests {
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, b"Hello/A=001000");
-        assert_eq!(result.extra, PositionExtra::Uncompressed);
+        assert_eq!(result.cst, AprsCst::Uncompressed);
     }
 
     #[test]
@@ -335,7 +340,7 @@ mod tests {
         assert_eq!(result.symbol_table, '\\');
         assert_eq!(result.symbol_code, '^');
         assert_eq!(result.comment, b"322/103/A=003054");
-        assert_eq!(result.extra, PositionExtra::Uncompressed);
+        assert_eq!(result.cst, AprsCst::Uncompressed);
     }
 
     #[test]
@@ -348,7 +353,7 @@ mod tests {
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, []);
-        assert_eq!(result.extra, PositionExtra::Uncompressed);
+        assert_eq!(result.cst, AprsCst::Uncompressed);
     }
 
     #[test]
@@ -362,7 +367,7 @@ mod tests {
         assert_eq!(result.symbol_table, '\\');
         assert_eq!(result.symbol_code, '^');
         assert_eq!(result.comment, b"322/103/A=003054");
-        assert_eq!(result.extra, PositionExtra::Uncompressed);
+        assert_eq!(result.cst, AprsCst::Uncompressed);
     }
 
     #[test]
