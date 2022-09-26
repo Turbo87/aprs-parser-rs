@@ -64,14 +64,32 @@ impl AprsCompressedCs {
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct AprsCourseSpeed {
-    pub course_degrees: i32,
-    pub speed_knots: f64,
+    course_degrees: u16,
+    speed_knots: f64,
 }
 
 impl AprsCourseSpeed {
+    pub fn new(course_degrees: u16, speed_knots: f64) -> Self {
+        assert!(course_degrees <= 360);
+        assert!(speed_knots < (1.08_f64).powi(255));
+
+        Self {
+            course_degrees,
+            speed_knots,
+        }
+    }
+
+    pub fn course_degrees(&self) -> u16 {
+        self.course_degrees
+    }
+
+    pub fn speed_knots(&self) -> f64 {
+        self.speed_knots
+    }
+
     fn from_cs(c: u8, s: u8) -> Self {
         Self {
-            course_degrees: c as i32 * 4,
+            course_degrees: c as u16 * 4,
             speed_knots: ((1.08_f64).powi(s as i32) - 1.0) as f64,
         }
     }
@@ -86,10 +104,20 @@ impl AprsCourseSpeed {
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct AprsRadioRange {
-    pub range_miles: f64,
+    range_miles: f64,
 }
 
 impl AprsRadioRange {
+    pub fn new(range_miles: f64) -> Self {
+        assert!(range_miles < (1.08_f64).powi(255));
+
+        Self { range_miles }
+    }
+
+    pub fn range_miles(&self) -> f64 {
+        self.range_miles
+    }
+
     fn from_s(s: u8) -> Self {
         Self {
             range_miles: (2.0 * (1.08_f64).powi(s as i32)) as f64,
@@ -105,10 +133,20 @@ impl AprsRadioRange {
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct AprsAltitude {
-    pub altitude_feet: f64,
+    altitude_feet: f64,
 }
 
 impl AprsAltitude {
+    pub fn new(altitude_feet: f64) -> Self {
+        assert!(altitude_feet < (1.002_f64).powi(255 * 91 + 255));
+
+        Self { altitude_feet }
+    }
+
+    pub fn altitude_feet(&self) -> f64 {
+        self.altitude_feet
+    }
+
     fn from_cs(c: u8, s: u8) -> Self {
         Self {
             altitude_feet: ((1.002_f64).powi(c as i32 * 91 + s as i32)) as f64,

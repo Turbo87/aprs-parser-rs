@@ -228,10 +228,7 @@ mod tests {
         assert_eq!(
             result.extra,
             PositionExtra::Compressed(Some((
-                AprsCompressedCs::CourseSpeed(AprsCourseSpeed {
-                    course_degrees: 220,
-                    speed_knots: 8.317274897290226,
-                }),
+                AprsCompressedCs::CourseSpeed(AprsCourseSpeed::new(220, 8.317274897290226,)),
                 AprsCompressionType {
                     gps_fix: GpsFix::Current,
                     nmea_source: NmeaSource::Other,
@@ -256,9 +253,7 @@ mod tests {
         assert_eq!(
             result.extra,
             PositionExtra::Compressed(Some((
-                AprsCompressedCs::RadioRange(AprsRadioRange {
-                    range_miles: 20.12531377814689
-                }),
+                AprsCompressedCs::RadioRange(AprsRadioRange::new(20.12531377814689)),
                 AprsCompressionType {
                     gps_fix: GpsFix::Current,
                     nmea_source: NmeaSource::Other,
@@ -282,9 +277,7 @@ mod tests {
         assert_eq!(
             result.extra,
             PositionExtra::Compressed(Some((
-                AprsCompressedCs::Altitude(AprsAltitude {
-                    altitude_feet: 10004.520050700292
-                }),
+                AprsCompressedCs::Altitude(AprsAltitude::new(10004.520050700292)),
                 AprsCompressionType {
                     gps_fix: GpsFix::Old,
                     nmea_source: NmeaSource::Gga,
