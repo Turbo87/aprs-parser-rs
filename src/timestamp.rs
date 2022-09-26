@@ -45,8 +45,8 @@ impl TryFrom<&[u8]> for Timestamp {
             parse_bytes(&b[4..6]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
 
         Ok(match b[6] {
-            b'z' => Timestamp::DDHHMM(one, two, three),
-            b'h' => Timestamp::HHMMSS(one, two, three),
+            b'z' | b'Z' => Timestamp::DDHHMM(one, two, three),
+            b'h' | b'H' => Timestamp::HHMMSS(one, two, three),
             _ => return Err(AprsError::InvalidTimestamp(b.to_owned())),
         })
     }
@@ -62,12 +62,22 @@ mod tests {
             Timestamp::try_from(&b"123456z"[..]),
             Ok(Timestamp::DDHHMM(12, 34, 56))
         );
+
+        assert_eq!(
+            Timestamp::try_from(&b"123456Z"[..]),
+            Ok(Timestamp::DDHHMM(12, 34, 56))
+        );
     }
 
     #[test]
     fn parse_hhmmss() {
         assert_eq!(
             Timestamp::try_from(&b"123456h"[..]),
+            Ok(Timestamp::HHMMSS(12, 34, 56))
+        );
+
+        assert_eq!(
+            Timestamp::try_from(&b"123456H"[..]),
             Ok(Timestamp::HHMMSS(12, 34, 56))
         );
     }
