@@ -130,7 +130,7 @@ impl From<AprsCompressionType> for u8 {
             + (u8::from(b3) << 3)
             + (u8::from(b2) << 2)
             + (u8::from(b1) << 1)
-            + (u8::from(b0) << 0)
+            + (u8::from(b0))
     }
 }
 

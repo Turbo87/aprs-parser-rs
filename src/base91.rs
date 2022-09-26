@@ -16,7 +16,7 @@ pub fn encode_ascii<W: Write>(val: f64, buf: &mut W, padding: usize) -> Result<(
 
     // pad with zeroes, plus 33
     for _ in digit_buf.len()..padding {
-        buf.write(&[33])?;
+        buf.write_all(&[33])?;
     }
 
     digit_buf.reverse();

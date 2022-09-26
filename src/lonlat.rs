@@ -200,7 +200,7 @@ mod tests {
         );
         assert_relative_eq!(
             *Longitude::parse_uncompressed(&b"04903.50W"[..]).unwrap(),
-            -49.0583333333333333
+            -49.05833333333333
         );
         assert_eq!(
             Longitude::parse_uncompressed(&b"04903.50N"[..]),
