@@ -14,8 +14,12 @@ pub enum AprsCompressedCs {
 
 impl AprsCompressedCs {
     pub(crate) fn parse(c: u8, s: u8, t: AprsCompressionType) -> Result<Self, AprsError> {
-        let c_lwr = c - 33;
-        let s_lwr = s - 33;
+        let c_lwr = c
+            .checked_sub(33)
+            .ok_or_else(|| AprsError::InvalidCs([c, s]))?;
+        let s_lwr = s
+            .checked_sub(33)
+            .ok_or_else(|| AprsError::InvalidCs([c, s]))?;
 
         if t.nmea_source == NmeaSource::Gga {
             Ok(AprsCompressedCs::Altitude(AprsAltitude::from_cs(
