@@ -1,8 +1,9 @@
-use std::convert::TryFrom;
+use std::borrow::Cow;
 use std::io::Write;
 
 use callsign::CallsignField;
 use AprsMessage;
+use AprsMicE;
 use AprsPosition;
 use AprsStatus;
 use Callsign;
@@ -13,7 +14,6 @@ use Via;
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPacket {
     pub from: Callsign,
-    pub to: Callsign,
     pub via: Vec<Via>,
     pub data: AprsData,
 }
@@ -62,14 +62,13 @@ impl AprsPacket {
             }
         }
 
-        let data = AprsData::try_from(body)?;
+        let data = AprsData::decode(body, to)?;
 
-        Ok(AprsPacket {
-            from,
-            to,
-            via,
-            data,
-        })
+        Ok(AprsPacket { from, via, data })
+    }
+
+    pub fn to(&self) -> Option<&Callsign> {
+        self.data.to()
     }
 
     /// Used for encoding a packet into ASCII for transmission on the internet (APRS-IS)
@@ -89,7 +88,7 @@ impl AprsPacket {
 
         self.from.encode_textual(false, buf)?;
         write!(buf, ">")?;
-        self.to.encode_textual(false, buf)?;
+        self.data.dest_field().encode_textual(false, buf)?;
         for v in &via {
             write!(buf, ",")?;
             v.encode_textual(buf)?;
@@ -142,20 +141,17 @@ impl AprsPacket {
         i += 2;
 
         // remainder is the information field
-        let data = AprsData::try_from(data.get(i..).unwrap_or(&[]))?;
+        let data = AprsData::decode(data.get(i..).unwrap_or(&[]), to)?;
 
-        Ok(Self {
-            data,
-            from,
-            to,
-            via,
-        })
+        Ok(Self { data, from, via })
     }
 
     /// Used for encoding a packet for transmission on the air (via KISS or otherwise)
     pub fn encode_ax25<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         // Destination address
-        self.to.encode_ax25(buf, CallsignField::Destination, true)?;
+        self.data
+            .dest_field()
+            .encode_ax25(buf, CallsignField::Destination, true)?;
 
         let via_calls: Vec<_> = self.via.iter().filter_map(|v| v.callsign()).collect();
 
@@ -189,23 +185,42 @@ pub enum AprsData {
     Position(AprsPosition),
     Message(AprsMessage),
     Status(AprsStatus),
-    Unknown,
-}
-
-impl TryFrom<&[u8]> for AprsData {
-    type Error = DecodeError;
-
-    fn try_from(s: &[u8]) -> Result<Self, DecodeError> {
-        Ok(match *s.first().unwrap_or(&0) {
-            b':' => AprsData::Message(AprsMessage::try_from(&s[1..])?),
-            b'!' | b'/' | b'=' | b'@' => AprsData::Position(AprsPosition::try_from(s)?),
-            b'>' => AprsData::Status(AprsStatus::try_from(&s[1..])?),
-            _ => AprsData::Unknown,
-        })
-    }
+    MicE(AprsMicE),
+    Unknown(Callsign),
 }
 
 impl AprsData {
+    pub fn to(&self) -> Option<&Callsign> {
+        match self {
+            AprsData::Position(p) => Some(&p.to),
+            AprsData::Message(m) => Some(&m.to),
+            AprsData::Status(s) => Some(&s.to),
+            AprsData::MicE(_) => None,
+            AprsData::Unknown(to) => Some(to),
+        }
+    }
+
+    fn dest_field(&self) -> Cow<Callsign> {
+        match self {
+            AprsData::Position(p) => Cow::Borrowed(&p.to),
+            AprsData::Message(m) => Cow::Borrowed(&m.to),
+            AprsData::Status(s) => Cow::Borrowed(&s.to),
+            AprsData::MicE(m) => Cow::Owned(m.encode_destination()),
+            AprsData::Unknown(to) => Cow::Borrowed(to),
+        }
+    }
+
+    fn decode(s: &[u8], to: Callsign) -> Result<Self, DecodeError> {
+        Ok(match *s.first().unwrap_or(&0) {
+            b':' => AprsData::Message(AprsMessage::decode(&s[1..], to)?),
+            b'!' | b'/' | b'=' | b'@' => AprsData::Position(AprsPosition::decode(s, to)?),
+            b'>' => AprsData::Status(AprsStatus::decode(&s[1..], to)?),
+            0x1c | b'`' => AprsData::MicE(AprsMicE::decode(&s[1..], to, true)?),
+            0x1d | b'\'' => AprsData::MicE(AprsMicE::decode(&s[1..], to, false)?),
+            _ => AprsData::Unknown(to),
+        })
+    }
+
     fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         match self {
             Self::Position(p) => {
@@ -217,7 +232,10 @@ impl AprsData {
             Self::Status(st) => {
                 st.encode(buf)?;
             }
-            Self::Unknown => return Err(EncodeError::InvalidData),
+            Self::MicE(m) => {
+                m.encode(buf)?;
+            }
+            Self::Unknown(_) => return Err(EncodeError::InvalidData),
         }
 
         Ok(())
@@ -234,7 +252,7 @@ mod tests {
     fn parse() {
         let result = AprsPacket::decode_textual(r"ID17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".as_bytes()).unwrap();
         assert_eq!(result.from, Callsign::new_no_ssid("ID17F2"));
-        assert_eq!(result.to, Callsign::new_no_ssid("APRS"));
+        assert_eq!(result.to(), Some(&Callsign::new_no_ssid("APRS")));
         assert_eq!(
             result.via,
             vec![
@@ -264,7 +282,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.from, Callsign::new_no_ssid("IC17F2"));
-        assert_eq!(result.to, Callsign::new_no_ssid("Aprs"));
+        assert_eq!(result.to(), Some(&Callsign::new_no_ssid("Aprs")));
         assert_eq!(
             result.via,
             vec![
@@ -289,7 +307,7 @@ mod tests {
             AprsPacket::decode_textual(&b"3D17F2>APRS,qAU,dl4mea:>312359zStatus seems okay!"[..])
                 .unwrap();
         assert_eq!(result.from, Callsign::new_no_ssid("3D17F2"));
-        assert_eq!(result.to, Callsign::new_no_ssid("APRS"));
+        assert_eq!(result.to(), Some(&Callsign::new_no_ssid("APRS")));
         assert_eq!(
             result.via,
             vec![
@@ -339,6 +357,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_packet_mic_e() {
+        let result = AprsPacket::decode_textual(
+            &b"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="[..],
+        )
+        .unwrap();
+
+        assert_eq!(
+            AprsPacket {
+                from: Callsign::new_with_ssid("DF1CHB", "9"),
+                via: vec![
+                    Via::Callsign(Callsign::new_no_ssid("ARISS"), false),
+                    Via::Callsign(Callsign::new_no_ssid("APRSAT"), false),
+                    Via::Callsign(Callsign::new_with_ssid("WIDE1", "1"), false),
+                    Via::QConstruct(QConstruct::AU),
+                    Via::Callsign(Callsign::new_with_ssid("DB0KOE", "12"), false)
+                ],
+                data: AprsData::MicE(AprsMicE {})
+            },
+            result
+        );
+    }
+
+    #[test]
     fn e2e_serialize_deserialize() {
         let valids = vec![
             r"3D17F2>APRS,qAS,DL4MEA:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
@@ -350,6 +391,8 @@ mod tests {
             r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
+            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q<0x1c>l|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
         ];
 
         for v in valids {
@@ -372,6 +415,8 @@ mod tests {
             r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
+            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q<0x1c>l|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
             // 0 to 8 via callsigns
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
             r"ICA3F2>APRS,qAS:>184050hAlso with HMS format...",
@@ -396,6 +441,9 @@ mod tests {
             r"IC17F2>APRS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,DL4MEA:>184050hAlso with HMS format...",
+            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q<0x1c>l|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
+            // 0 to 8 via callsigns
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
             r"ICA3F2>APRS,ABC:>184050hAlso with HMS format...",
