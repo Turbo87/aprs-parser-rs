@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use base91;
 use compression_type::NmeaSource;
 use AprsCompressionType;
 use AprsError;
@@ -14,12 +15,8 @@ pub enum AprsCompressedCs {
 
 impl AprsCompressedCs {
     pub(crate) fn parse(c: u8, s: u8, t: AprsCompressionType) -> Result<Self, AprsError> {
-        let c_lwr = c
-            .checked_sub(33)
-            .ok_or_else(|| AprsError::InvalidCs([c, s]))?;
-        let s_lwr = s
-            .checked_sub(33)
-            .ok_or_else(|| AprsError::InvalidCs([c, s]))?;
+        let c_lwr = base91::digit_from_ascii(c).ok_or(AprsError::InvalidCs([c, s]))?;
+        let s_lwr = base91::digit_from_ascii(s).ok_or(AprsError::InvalidCs([c, s]))?;
 
         if t.nmea_source == NmeaSource::Gga {
             Ok(AprsCompressedCs::Altitude(AprsAltitude::from_cs(
@@ -44,11 +41,11 @@ impl AprsCompressedCs {
         match self {
             AprsCompressedCs::CourseSpeed(cs) => {
                 let (c, s) = cs.to_cs();
-                buf.write_all(&[c + 33, s + 33])?;
+                buf.write_all(&[base91::digit_to_ascii(c), base91::digit_to_ascii(s)])?;
             }
             AprsCompressedCs::RadioRange(rr) => {
                 let s = rr.to_s();
-                buf.write_all(&[b'{', s + 33])?;
+                buf.write_all(&[b'{', base91::digit_to_ascii(s)])?;
             }
             AprsCompressedCs::Altitude(a) => {
                 if t.nmea_source != NmeaSource::Gga {
@@ -56,11 +53,11 @@ impl AprsCompressedCs {
                 }
 
                 let (c, s) = a.to_cs();
-                buf.write_all(&[c + 33, s + 33])?;
+                buf.write_all(&[base91::digit_to_ascii(c), base91::digit_to_ascii(s)])?;
             }
         }
 
-        buf.write_all(&[u8::from(t) + 33])?;
+        buf.write_all(&[base91::digit_to_ascii(u8::from(t))])?;
 
         Ok(())
     }
@@ -92,9 +89,15 @@ impl AprsCourseSpeed {
     }
 
     fn from_cs(c: u8, s: u8) -> Self {
+        let course_degrees = c as u16 * 4;
+        let speed_knots = ((1.08_f64).powi(s as i32) - 1.0) as f64;
+
+        debug_assert!(course_degrees <= 360);
+        debug_assert!(speed_knots < (1.08_f64).powi(255));
+
         Self {
-            course_degrees: c as u16 * 4,
-            speed_knots: ((1.08_f64).powi(s as i32) - 1.0) as f64,
+            course_degrees,
+            speed_knots,
         }
     }
 
@@ -173,8 +176,8 @@ mod tests {
 
     #[test]
     fn course_speed_exhaustive() {
-        for c in 0..=255 {
-            for s in 0..=255 {
+        for c in 0..91 {
+            for s in 0..91 {
                 let val = AprsCourseSpeed::from_cs(c, s);
 
                 assert_eq!((c, s), val.to_cs());
@@ -184,7 +187,7 @@ mod tests {
 
     #[test]
     fn radio_range_exhaustive() {
-        for s in 0..=255 {
+        for s in 0..91 {
             let val = AprsRadioRange::from_s(s);
 
             assert_eq!(s, val.to_s());
@@ -193,8 +196,8 @@ mod tests {
 
     #[test]
     fn altitude_exhaustive() {
-        for c in 0..=90 {
-            for s in 0..=90 {
+        for c in 0..91 {
+            for s in 0..91 {
                 let val = AprsAltitude::from_cs(c, s);
 
                 assert_eq!((c, s), val.to_cs());

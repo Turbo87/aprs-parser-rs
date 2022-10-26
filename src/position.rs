@@ -34,7 +34,9 @@ impl TryFrom<&[u8]> for AprsPosition {
     type Error = AprsError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        let first = *b.get(0).ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
+        let first = *b
+            .first()
+            .ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
         let messaging_supported = first == b'=' || first == b'@';
 
         // parse timestamp if necessary
@@ -52,7 +54,7 @@ impl TryFrom<&[u8]> for AprsPosition {
         let b = if has_timestamp { &b[8..] } else { &b[1..] };
 
         // check for compressed position format
-        let is_uncompressed_position = (*b.get(0).unwrap_or(&0) as char).is_numeric();
+        let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
         match is_uncompressed_position {
             true => Self::parse_uncompressed(b, timestamp, messaging_supported),
             false => Self::parse_compressed(b, timestamp, messaging_supported),
