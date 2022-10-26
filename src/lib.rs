@@ -8,52 +8,56 @@
 //! ```rust
 //! extern crate aprs_parser;
 //!
+//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, Callsign, Latitude, Longitude, Timestamp};
+//!
 //! fn main() {
 //!     let result = aprs_parser::parse(
 //!         br"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054"
 //!     );
 //!
-//!     println!("{:#?}", result);
-//!
-//!     // Ok(
-//!     //     AprsPacket {
-//!     //         from: Callsign {
-//!     //             call: "ICA3D17F2",
-//!     //             ssid: None
-//!     //         },
-//!     //         to: Callsign {
-//!     //             call: "APRS",
-//!     //             ssid: None
-//!     //         },
-//!     //         via: [
-//!     //             Callsign {
-//!     //                 call: "qAS",
-//!     //                 ssid: None
-//!     //             },
-//!     //             Callsign {
-//!     //                 call: "dl4mea",
-//!     //                 ssid: None
-//!     //             }
-//!     //         ],
-//!     //         data: Position(
-//!     //             AprsPosition {
-//!     //                 timestamp: Some(
-//!     //                     HHMMSS(
-//!     //                         7,
-//!     //                         48,
-//!     //                         49
-//!     //                     )
-//!     //                 ),
-//!     //                 messaging_supported: false,
-//!     //                 latitude: Latitude(48.360165),
-//!     //                 longitude: Longitude(12.408166),
-//!     //                 symbol_table: '\\',
-//!     //                 symbol_code: '^',
-//!     //                 comment: "322/103/A=003054"
-//!     //             }
-//!     //         )
-//!     //     }
-//!     // )
+//!     assert_eq!(
+//!         result,
+//!         Ok(
+//!             AprsPacket {
+//!                 from: Callsign {
+//!                     call: "ICA3D17F2".to_string(),
+//!                     ssid: None
+//!                 },
+//!                 to: Callsign {
+//!                     call: "APRS".to_string(),
+//!                     ssid: None
+//!                 },
+//!                 via: vec![
+//!                     Callsign {
+//!                         call: "qAS".to_string(),
+//!                         ssid: None
+//!                     },
+//!                     Callsign {
+//!                         call: "dl4mea".to_string(),
+//!                         ssid: None
+//!                     }
+//!                 ],
+//!                 data: AprsData::Position(
+//!                     AprsPosition {
+//!                         timestamp: Some(
+//!                             Timestamp::HHMMSS(
+//!                                 7,
+//!                                 48,
+//!                                 49
+//!                             )
+//!                         ),
+//!                         messaging_supported: false,
+//!                         latitude: Latitude::new(48.36016666666667).unwrap(),
+//!                         longitude: Longitude::new(12.408166666666666).unwrap(),
+//!                         symbol_table: '\\',
+//!                         symbol_code: '^',
+//!                         comment: b"322/103/A=003054".to_vec(),
+//!                         cst: AprsCst::Uncompressed,
+//!                     }
+//!                 )
+//!             }
+//!        )
+//!    );
 //! }
 //! ```
 
@@ -87,7 +91,7 @@ pub use error::{AprsError, EncodeError};
 pub use lonlat::{Latitude, Longitude};
 pub use message::AprsMessage;
 pub use packet::{AprsData, AprsPacket};
-pub use position::AprsPosition;
+pub use position::{AprsCst, AprsPosition};
 pub use timestamp::Timestamp;
 
 pub fn parse(b: &[u8]) -> Result<AprsPacket, AprsError> {

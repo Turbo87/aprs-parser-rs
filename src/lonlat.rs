@@ -18,6 +18,16 @@ impl Deref for Latitude {
 }
 
 impl Latitude {
+    /// Creates a new `Latitude`.
+    /// Returns `None` if the given value is not a valid latitude
+    pub fn new(value: f64) -> Option<Self> {
+        if value > 90.0 || value < -90.0 || value.is_nan() {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
+
     pub(crate) fn parse_uncompressed(b: &[u8]) -> Result<Self, AprsError> {
         if b.len() != 8 || b[4] != b'.' {
             return Err(AprsError::InvalidLatitude(b.to_owned()));
@@ -39,11 +49,7 @@ impl Latitude {
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if north { value } else { -value };
 
-        if value > 90. || value < -90. {
-            return Err(AprsError::InvalidLatitude(b.to_owned()));
-        }
-
-        Ok(Self(value))
+        Self::new(value).ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))
     }
 
     pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, AprsError> {
@@ -92,6 +98,16 @@ impl Deref for Longitude {
 }
 
 impl Longitude {
+    /// Creates a new `Longitude`.
+    /// Returns `None` if the given value is not a valid longitude
+    pub fn new(value: f64) -> Option<Self> {
+        if value > 180.0 || value < -180.0 || value.is_nan() {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
+
     pub(crate) fn parse_uncompressed(b: &[u8]) -> Result<Self, AprsError> {
         if b.len() != 9 || b[5] != b'.' {
             return Err(AprsError::InvalidLongitude(b.to_owned()));
@@ -114,11 +130,7 @@ impl Longitude {
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if east { value } else { -value };
 
-        if value > 180. || value < -180. {
-            return Err(AprsError::InvalidLongitude(b.to_owned()));
-        }
-
-        Ok(Self(value))
+        Self::new(value).ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))
     }
 
     pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, AprsError> {
