@@ -39,14 +39,18 @@ impl Latitude {
             _ => return Err(AprsError::InvalidLatitude(b.to_owned())),
         };
 
-        let deg = parse_bytes::<u32>(&b[0..2])
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))? as f64;
-        let min = parse_bytes::<u32>(&b[2..4])
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))? as f64;
-        let min_frac = parse_bytes::<u32>(&b[5..7])
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))? as f64;
+        // Some APRS lats have trailing spaces
+        // This is used to convey ambiguity and is only valid in latitudes
+        // Once we encounter a space, the remainder must be spaces
+        let (deg, only_spaces) = parse_bytes_trailing_spaces(&[b[0], b[1]], false)
+            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+        let (min, only_spaces) = parse_bytes_trailing_spaces(&[b[2], b[3]], only_spaces)
+            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
 
-        let value = deg + min / 60. + min_frac / 6_000.;
+        let (min_frac, _) = parse_bytes_trailing_spaces(&[b[5], b[6]], only_spaces)
+            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+
+        let value = deg as f64 + min as f64 / 60. + min_frac as f64 / 6_000.;
         let value = if north { value } else { -value };
 
         Self::new(value).ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))
@@ -168,9 +172,40 @@ impl Longitude {
     }
 }
 
+// if only_spaces is true, requires that b is only spaces
+// returns the parsed value as well as if we found any spaces (used for cascading)
+fn parse_bytes_trailing_spaces(b: &[u8; 2], only_spaces: bool) -> Option<(u32, bool)> {
+    if only_spaces {
+        if b == &[b' ', b' '] {
+            return Some((0, true));
+        } else {
+            return None;
+        }
+    }
+    match (b[0], b[1]) {
+        (b' ', b' ') => Some((0, true)),
+        (_, b' ') => parse_bytes::<u32>(&b[0..1]).map(|v| (v * 10, true)),
+        (_, _) => parse_bytes::<u32>(&b[..]).map(|v| (v, false)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_bytes_trailing_spaces() {
+        assert_eq!(Some((12, false)), parse_bytes_trailing_spaces(b"12", false));
+        assert_eq!(Some((10, true)), parse_bytes_trailing_spaces(b"1 ", false));
+        assert_eq!(Some((0, true)), parse_bytes_trailing_spaces(b"  ", false));
+
+        assert_eq!(None, parse_bytes_trailing_spaces(b" 2", false));
+
+        assert_eq!(None, parse_bytes_trailing_spaces(b"12", true));
+        assert_eq!(None, parse_bytes_trailing_spaces(b"1 ", true));
+        assert_eq!(None, parse_bytes_trailing_spaces(b" 1", true));
+        assert_eq!(Some((0, true)), parse_bytes_trailing_spaces(b"  ", true));
+    }
 
     #[test]
     fn test_parse_uncompressed_latitude() {
@@ -181,6 +216,38 @@ mod tests {
         assert_relative_eq!(
             *Latitude::parse_uncompressed(&b"4903.50S"[..]).unwrap(),
             -49.05833333333333
+        );
+        assert_relative_eq!(
+            *Latitude::parse_uncompressed(&b"4903.5 S"[..]).unwrap(),
+            -49.05833333333333
+        );
+        assert_relative_eq!(
+            *Latitude::parse_uncompressed(&b"4903.  S"[..]).unwrap(),
+            -49.05
+        );
+        assert_relative_eq!(
+            *Latitude::parse_uncompressed(&b"490 .  S"[..]).unwrap(),
+            -49.0
+        );
+        assert_relative_eq!(
+            *Latitude::parse_uncompressed(&b"4   .  S"[..]).unwrap(),
+            -40.0
+        );
+        assert_relative_eq!(
+            *Latitude::parse_uncompressed(&b"    .  S"[..]).unwrap(),
+            0.0
+        );
+        assert_eq!(
+            Latitude::parse_uncompressed(&b"49 3.50W"[..]),
+            Err(AprsError::InvalidLatitude(b"49 3.50W".to_vec()))
+        );
+        assert_eq!(
+            Latitude::parse_uncompressed(&b"490 .50W"[..]),
+            Err(AprsError::InvalidLatitude(b"490 .50W".to_vec()))
+        );
+        assert_eq!(
+            Latitude::parse_uncompressed(&b"49  . 0W"[..]),
+            Err(AprsError::InvalidLatitude(b"49  . 0W".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"4903.50W"[..]),
