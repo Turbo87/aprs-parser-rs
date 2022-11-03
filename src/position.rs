@@ -41,6 +41,33 @@ pub enum Precision {
     HundredthMinute,
 }
 
+impl Precision {
+    pub(crate) fn num_digits(&self) -> u8 {
+        match self {
+            Precision::HundredthMinute => 0,
+            Precision::TenthMinute => 1,
+            Precision::OneMinute => 2,
+            Precision::TenMinute => 3,
+            Precision::OneDegree => 4,
+            Precision::TenDegree => 5,
+        }
+    }
+
+    pub(crate) fn from_num_digits(digits: u8) -> Option<Self> {
+        let res = match digits {
+            0 => Precision::HundredthMinute,
+            1 => Precision::TenthMinute,
+            2 => Precision::OneMinute,
+            3 => Precision::TenMinute,
+            4 => Precision::OneDegree,
+            5 => Precision::TenDegree,
+            _ => return None,
+        };
+
+        Some(res)
+    }
+}
+
 impl Default for Precision {
     fn default() -> Self {
         Self::HundredthMinute
@@ -181,7 +208,7 @@ impl AprsPosition {
     }
 
     pub fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        self.latitude.encode_uncompressed(buf)?;
+        self.latitude.encode_uncompressed(buf, self.precision)?;
         write!(buf, "{}", self.symbol_table)?;
         self.longitude.encode_uncompressed(buf)?;
         write!(buf, "{}", self.symbol_code)?;
@@ -223,6 +250,13 @@ mod tests {
     use AprsAltitude;
     use AprsCourseSpeed;
     use AprsRadioRange;
+
+    #[test]
+    fn precision_e2e() {
+        for i in 0..6 {
+            assert_eq!(i, Precision::from_num_digits(i).unwrap().num_digits());
+        }
+    }
 
     #[test]
     fn parse_compressed_without_timestamp_or_messaging() {
@@ -405,6 +439,7 @@ mod tests {
             &br"/074849h4821.61N\01224.49E^322/103/A=003054"[..],
             &b"=4903.50N/07201.75W-"[..],
             &br"@074849h4821.61N\01224.49E^322/103/A=003054"[..],
+            &br"@074849h4821.  N\01224.49E^322/103/A=003054"[..],
         ];
 
         for p in positions {

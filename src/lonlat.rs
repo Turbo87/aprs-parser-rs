@@ -59,16 +59,8 @@ impl Latitude {
             .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
         total_spaces += num_spaces;
 
-        let precision = match total_spaces {
-            0 => Precision::HundredthMinute,
-            1 => Precision::TenthMinute,
-            2 => Precision::OneMinute,
-            3 => Precision::TenMinute,
-            4 => Precision::OneDegree,
-            5 => Precision::TenDegree,
-            6 => return Err(AprsError::InvalidLatitude(b.to_owned())),
-            _ => unreachable!(),
-        };
+        let precision = Precision::from_num_digits(total_spaces)
+            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
 
         let value = deg as f64 + min as f64 / 60. + min_frac as f64 / 6_000.;
         let value = if north { value } else { -value };
@@ -91,7 +83,11 @@ impl Latitude {
         base91::encode_ascii(value, buf, 4)
     }
 
-    pub(crate) fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+    pub(crate) fn encode_uncompressed<W: Write>(
+        &self,
+        buf: &mut W,
+        precision: Precision,
+    ) -> Result<(), EncodeError> {
         let lat = self.0;
 
         let (dir, lat) = if lat >= 0.0 { ('N', lat) } else { ('S', -lat) };
@@ -100,7 +96,21 @@ impl Latitude {
         let min = ((lat - (deg as f64)) * 60.0) as u32;
         let min_frac = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
 
-        write!(buf, "{:02}{:02}.{:02}{}", deg, min, min_frac, dir)?;
+        // into_bytes is safe because we know the string only contains ASCII values
+        let mut digit_buffer = format!("{:02}{:02}{:02}", deg, min, min_frac).into_bytes();
+
+        // zero out fields as required for precision
+        // Ideally we would be doing some clever rounding here
+        // E.g. if last 2 digits were blanked,
+        // 4905.83 would become 4906.__
+        for i in (6 - precision.num_digits())..6 {
+            digit_buffer[i as usize] = b' ';
+        }
+
+        buf.write_all(&digit_buffer[0..4])?;
+        write!(buf, ".")?;
+        buf.write_all(&digit_buffer[4..6])?;
+        write!(buf, "{}", dir)?;
         Ok(())
     }
 }
@@ -337,23 +347,30 @@ mod tests {
         let mut buf = vec![];
         Latitude::new(49.05833)
             .unwrap()
-            .encode_uncompressed(&mut buf)
+            .encode_uncompressed(&mut buf, Precision::default())
             .unwrap();
         assert_eq!(buf, &b"4903.50N"[..]);
 
         let mut buf = vec![];
         Latitude::new(-49.05833)
             .unwrap()
-            .encode_uncompressed(&mut buf)
+            .encode_uncompressed(&mut buf, Precision::default())
             .unwrap();
         assert_eq!(buf, &b"4903.50S"[..]);
 
         let mut buf = vec![];
         Latitude::new(0.0)
             .unwrap()
-            .encode_uncompressed(&mut buf)
+            .encode_uncompressed(&mut buf, Precision::default())
             .unwrap();
         assert_eq!(buf, &b"0000.00N"[..]);
+
+        let mut buf = vec![];
+        Latitude::new(-49.05833)
+            .unwrap()
+            .encode_uncompressed(&mut buf, Precision::OneMinute)
+            .unwrap();
+        assert_eq!(buf, &b"4903.  S"[..]);
     }
 
     #[test]
