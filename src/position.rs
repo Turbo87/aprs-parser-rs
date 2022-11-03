@@ -14,6 +14,7 @@ pub struct AprsPosition {
     pub messaging_supported: bool,
     pub latitude: Latitude,
     pub longitude: Longitude,
+    pub precision: Precision,
     pub symbol_table: char,
     pub symbol_code: char,
     pub comment: Vec<u8>,
@@ -28,6 +29,22 @@ pub enum AprsCst {
     },
     CompressedNone,
     Uncompressed,
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+pub enum Precision {
+    TenDegree,
+    OneDegree,
+    TenMinute,
+    OneMinute,
+    TenthMinute,
+    HundredthMinute,
+}
+
+impl Default for Precision {
+    fn default() -> Self {
+        Self::HundredthMinute
+    }
 }
 
 impl TryFrom<&[u8]> for AprsPosition {
@@ -103,6 +120,7 @@ impl AprsPosition {
             messaging_supported,
             latitude,
             longitude,
+            precision: Precision::default(),
             symbol_table,
             symbol_code,
             comment,
@@ -120,7 +138,7 @@ impl AprsPosition {
         }
 
         // parse position
-        let latitude = Latitude::parse_uncompressed(&b[0..8])?;
+        let (latitude, precision) = Latitude::parse_uncompressed(&b[0..8])?;
         let longitude = Longitude::parse_uncompressed(&b[9..18])?;
 
         let symbol_table = b[8] as char;
@@ -133,6 +151,7 @@ impl AprsPosition {
             messaging_supported,
             latitude,
             longitude,
+            precision,
             symbol_table,
             symbol_code,
             comment,
@@ -321,10 +340,11 @@ mod tests {
 
     #[test]
     fn parse_with_comment() {
-        let result = AprsPosition::try_from(&b"!4903.50N/07201.75W-Hello/A=001000"[..]).unwrap();
+        let result = AprsPosition::try_from(&b"!4903.5 N/07201.75W-Hello/A=001000"[..]).unwrap();
         assert_eq!(result.timestamp, None);
         assert_relative_eq!(*result.latitude, 49.05833333333333);
         assert_relative_eq!(*result.longitude, -72.02916666666667);
+        assert_eq!(Precision::TenthMinute, result.precision);
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, b"Hello/A=001000");
