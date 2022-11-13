@@ -168,7 +168,7 @@ impl AprsPosition {
 
         // parse position
         let (latitude, precision) = Latitude::parse_uncompressed(&b[0..8])?;
-        let longitude = Longitude::parse_uncompressed(&b[9..18])?;
+        let longitude = Longitude::parse_uncompressed(&b[9..18], precision)?;
 
         let symbol_table = b[8] as char;
         let symbol_code = b[18] as char;
@@ -410,11 +410,11 @@ mod tests {
     fn parse_with_comment() {
         let result = AprsPosition::try_from(&b"!4903.5 N/07201.75W-Hello/A=001000"[..]).unwrap();
         assert_eq!(result.timestamp, None);
-        assert_relative_eq!(*result.latitude, 49.05833333333333);
-        assert_relative_eq!(*result.longitude, -72.02916666666667);
+        assert_eq!(*result.latitude, 49.05833333333333);
+        assert_eq!(*result.longitude, -72.02833333333334);
         assert_eq!(Precision::TenthMinute, result.precision);
         assert_eq!(49.0575..=49.05916666666666, result.latitude_bounding());
-        assert_eq!(-72.03..=-72.02833333333334, result.longitude_bounding());
+        assert_eq!(-72.02916666666667..=-72.0275, result.longitude_bounding());
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, b"Hello/A=001000");
@@ -475,7 +475,7 @@ mod tests {
             &br"/074849h4821.61N\01224.49E^322/103/A=003054"[..],
             &b"=4903.50N/07201.75W-"[..],
             &br"@074849h4821.61N\01224.49E^322/103/A=003054"[..],
-            &br"@074849h4821.  N\01224.49E^322/103/A=003054"[..],
+            &br"@074849h4821.  N\01224.00E^322/103/A=003054"[..],
         ];
 
         for p in positions {

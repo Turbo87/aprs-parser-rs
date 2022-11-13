@@ -137,7 +137,13 @@ impl Longitude {
         }
     }
 
-    pub(crate) fn parse_uncompressed(b: &[u8]) -> Result<Self, AprsError> {
+    /// The value of the longitude.
+    pub fn value(&self) -> f64 {
+        self.0
+    }
+
+    /// Precision is needed so we know how many digits to ignore
+    pub(crate) fn parse_uncompressed(b: &[u8], precision: Precision) -> Result<Self, AprsError> {
         if b.len() != 9 || b[5] != b'.' {
             return Err(AprsError::InvalidLongitude(b.to_owned()));
         }
@@ -148,11 +154,20 @@ impl Longitude {
             _ => return Err(AprsError::InvalidLongitude(b.to_owned())),
         };
 
-        let deg = parse_bytes::<u32>(&b[0..3])
+        let mut digit_buffer = [0; 7];
+        digit_buffer[0..5].copy_from_slice(&b[0..5]);
+        digit_buffer[5..7].copy_from_slice(&b[6..8]);
+
+        // zero out the digits we don't care about
+        for i in (7 - precision.num_digits())..7 {
+            digit_buffer[i as usize] = b'0';
+        }
+
+        let deg = parse_bytes::<u32>(&digit_buffer[0..3])
             .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))? as f64;
-        let min = parse_bytes::<u32>(&b[3..5])
+        let min = parse_bytes::<u32>(&digit_buffer[3..5])
             .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))? as f64;
-        let min_frac = parse_bytes::<u32>(&b[6..8])
+        let min_frac = parse_bytes::<u32>(&digit_buffer[5..7])
             .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))?
             as f64;
 
@@ -313,31 +328,39 @@ mod tests {
     #[test]
     fn test_parse_uncompressed_longitude() {
         assert_relative_eq!(
-            *Longitude::parse_uncompressed(&b"12903.50E"[..]).unwrap(),
+            *Longitude::parse_uncompressed(&b"12903.50E"[..], Precision::default()).unwrap(),
             129.05833333333333
         );
         assert_relative_eq!(
-            *Longitude::parse_uncompressed(&b"04903.50W"[..]).unwrap(),
+            *Longitude::parse_uncompressed(&b"04903.50W"[..], Precision::default()).unwrap(),
             -49.05833333333333
         );
         assert_eq!(
-            Longitude::parse_uncompressed(&b"04903.50N"[..]),
+            Longitude::parse_uncompressed(&b"04903.50N"[..], Precision::default()),
             Err(AprsError::InvalidLongitude(b"04903.50N".to_vec()))
         );
         assert_eq!(
-            Longitude::parse_uncompressed(&b"04903.50S"[..]),
+            Longitude::parse_uncompressed(&b"04903.50S"[..], Precision::default()),
             Err(AprsError::InvalidLongitude(b"04903.50S".to_vec()))
         );
         assert_eq!(
-            Longitude::parse_uncompressed(&b"18903.50E"[..]),
+            Longitude::parse_uncompressed(&b"18903.50E"[..], Precision::default()),
             Err(AprsError::InvalidLongitude(b"18903.50E".to_vec()))
         );
         assert_relative_eq!(
-            *Longitude::parse_uncompressed(&b"00000.00E"[..]).unwrap(),
+            *Longitude::parse_uncompressed(&b"00000.00E"[..], Precision::default()).unwrap(),
             0.0
         );
         assert_relative_eq!(
-            *Longitude::parse_uncompressed(&b"00000.00W"[..]).unwrap(),
+            *Longitude::parse_uncompressed(&b"00000.00W"[..], Precision::default()).unwrap(),
+            0.0
+        );
+        assert_relative_eq!(
+            *Longitude::parse_uncompressed(&b"00000.ZZW"[..], Precision::OneMinute).unwrap(),
+            0.0
+        );
+        assert_relative_eq!(
+            *Longitude::parse_uncompressed(&b"00000.98W"[..], Precision::OneMinute).unwrap(),
             0.0
         );
     }

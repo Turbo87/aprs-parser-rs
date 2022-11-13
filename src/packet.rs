@@ -108,7 +108,6 @@ impl AprsData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use Latitude;
     use Timestamp;
 
     #[test]
@@ -124,8 +123,8 @@ mod tests {
         match result.data {
             AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-                assert_eq!(position.latitude, Latitude::new(48.36016666666667).unwrap());
-                assert_relative_eq!(*position.longitude, 12.408166666666666);
+                assert_eq!(position.latitude.value(), 48.36016666666667);
+                assert_eq!(position.longitude.value(), 12.408166666666666);
                 assert_eq!(
                     position.comment,
                     b"322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
@@ -164,7 +163,7 @@ mod tests {
             r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
             r"ICA3D17F2>APRS,qAS,dl4mea:@074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
             r"ICA3D17F2>APRS,qAS,dl4mea:!4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
-            r"ICA3D17F2>APRS,qAS,dl4mea:!48  .  N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ICA3D17F2>APRS,qAS,dl4mea:!48  .  N\01200.00E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
             r"ICA3D17F2>APRS,qAS,dl4mea:=4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
             r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {32975",
             r"ICA3D17F2>Aprs,qAS,dl4mea::DESTINATI:Hello World! This msg has a : colon ",
