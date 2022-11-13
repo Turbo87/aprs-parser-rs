@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::io::Write;
+use std::ops::RangeInclusive;
 
 use lonlat::{Latitude, Longitude};
 use AprsCompressedCs;
@@ -7,19 +8,6 @@ use AprsCompressionType;
 use AprsError;
 use EncodeError;
 use Timestamp;
-
-#[derive(PartialEq, Debug, Clone)]
-pub struct AprsPosition {
-    pub timestamp: Option<Timestamp>,
-    pub messaging_supported: bool,
-    pub latitude: Latitude,
-    pub longitude: Longitude,
-    pub precision: Precision,
-    pub symbol_table: char,
-    pub symbol_code: char,
-    pub comment: Vec<u8>,
-    pub cst: AprsCst,
-}
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum AprsCst {
@@ -42,6 +30,25 @@ pub enum Precision {
 }
 
 impl Precision {
+    /// Returns the width of the precision in degrees.
+    /// For example, `Precision::OneDegree` would return 1.0.
+    pub fn width(&self) -> f64 {
+        match self {
+            Precision::HundredthMinute => 1.0 / 6000.0,
+            Precision::TenthMinute => 1.0 / 600.0,
+            Precision::OneMinute => 1.0 / 60.0,
+            Precision::TenMinute => 1.0 / 6.0,
+            Precision::OneDegree => 1.0,
+            Precision::TenDegree => 10.0,
+        }
+    }
+
+    fn range(&self, center: f64) -> RangeInclusive<f64> {
+        let width = self.width();
+
+        (center - (width / 2.0))..=(center + (width / 2.0))
+    }
+
     pub(crate) fn num_digits(&self) -> u8 {
         match self {
             Precision::HundredthMinute => 0,
@@ -74,39 +81,34 @@ impl Default for Precision {
     }
 }
 
-impl TryFrom<&[u8]> for AprsPosition {
-    type Error = AprsError;
+#[derive(PartialEq, Debug, Clone)]
+pub struct AprsPosition {
+    pub timestamp: Option<Timestamp>,
+    pub messaging_supported: bool,
 
-    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        let first = *b
-            .first()
-            .ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
-        let messaging_supported = first == b'=' || first == b'@';
+    /// Latitudes aren't specified precisely in APRS and have ambiguity built in. This value stores the center, but you can also call `AprsPosition::latitude_bounding()` to get the entire range that the actual latitude could be in.
+    pub latitude: Latitude,
 
-        // parse timestamp if necessary
-        let has_timestamp = first == b'@' || first == b'/';
-        let timestamp = if has_timestamp {
-            Some(Timestamp::try_from(
-                b.get(1..8)
-                    .ok_or_else(|| AprsError::InvalidPosition(b.to_vec()))?,
-            )?)
-        } else {
-            None
-        };
-
-        // strip leading type symbol and potential timestamp
-        let b = if has_timestamp { &b[8..] } else { &b[1..] };
-
-        // check for compressed position format
-        let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
-        match is_uncompressed_position {
-            true => Self::parse_uncompressed(b, timestamp, messaging_supported),
-            false => Self::parse_compressed(b, timestamp, messaging_supported),
-        }
-    }
+    /// Longitudes aren't specified precisely in APRS and have ambiguity built in. This value stores the center, but you can also call `AprsPosition::longitude_bounding()` to get the entire range that the actual longitude could be in.
+    pub longitude: Longitude,
+    pub precision: Precision,
+    pub symbol_table: char,
+    pub symbol_code: char,
+    pub comment: Vec<u8>,
+    pub cst: AprsCst,
 }
 
 impl AprsPosition {
+    /// Latitudes in APRS aren't perfectly precise - they have a configurable level of ambiguity. This is stored in the `precision` field on the `AprsPosition` struct. This method returns a range of what the actual latitude value might be.
+    pub fn latitude_bounding(&self) -> RangeInclusive<f64> {
+        self.precision.range(self.latitude.value())
+    }
+
+    /// Longitudes in APRS aren't perfectly precise - they have a configurable level of ambiguity. This is stored in the `precision` field on the `AprsPosition` struct. This method returns a range of what the actual longitude value might be.
+    pub fn longitude_bounding(&self) -> RangeInclusive<f64> {
+        self.precision.range(self.longitude.value())
+    }
+
     fn parse_compressed(
         b: &[u8],
         timestamp: Option<Timestamp>,
@@ -240,6 +242,38 @@ impl AprsPosition {
         buf.write_all(&self.comment)?;
 
         Ok(())
+    }
+}
+
+impl TryFrom<&[u8]> for AprsPosition {
+    type Error = AprsError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let first = *b
+            .first()
+            .ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
+        let messaging_supported = first == b'=' || first == b'@';
+
+        // parse timestamp if necessary
+        let has_timestamp = first == b'@' || first == b'/';
+        let timestamp = if has_timestamp {
+            Some(Timestamp::try_from(
+                b.get(1..8)
+                    .ok_or_else(|| AprsError::InvalidPosition(b.to_vec()))?,
+            )?)
+        } else {
+            None
+        };
+
+        // strip leading type symbol and potential timestamp
+        let b = if has_timestamp { &b[8..] } else { &b[1..] };
+
+        // check for compressed position format
+        let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
+        match is_uncompressed_position {
+            true => Self::parse_uncompressed(b, timestamp, messaging_supported),
+            false => Self::parse_compressed(b, timestamp, messaging_supported),
+        }
     }
 }
 
@@ -379,6 +413,8 @@ mod tests {
         assert_relative_eq!(*result.latitude, 49.05833333333333);
         assert_relative_eq!(*result.longitude, -72.02916666666667);
         assert_eq!(Precision::TenthMinute, result.precision);
+        assert_eq!(49.0575..=49.05916666666666, result.latitude_bounding());
+        assert_eq!(-72.03..=-72.02833333333334, result.longitude_bounding());
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, b"Hello/A=001000");
