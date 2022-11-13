@@ -96,17 +96,22 @@ impl Latitude {
         let min = ((lat - (deg as f64)) * 60.0) as u32;
         let min_frac = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
 
-        // into_bytes is safe because we know the string only contains ASCII values
-        let mut digit_buffer = format!("{:02}{:02}{:02}", deg, min, min_frac).into_bytes();
-
         // zero out fields as required for precision
         // Ideally we would be doing some clever rounding here
         // E.g. if last 2 digits were blanked,
         // 4905.83 would become 4906.__
-        for i in (6 - precision.num_digits())..6 {
-            digit_buffer[i as usize] = b' ';
-        }
+        let mut digit_buffer = [b' '; 6];
+        let blank_index = 6 - precision.num_digits() as usize;
 
+        // write will only fail if there isn't enough space
+        // which is what we want (the remaining buffer should remain untouched)
+        let _ = write!(
+            &mut digit_buffer[..blank_index],
+            "{:02}{:02}{:02}",
+            deg,
+            min,
+            min_frac
+        );
         buf.write_all(&digit_buffer[0..4])?;
         write!(buf, ".")?;
         buf.write_all(&digit_buffer[4..6])?;
