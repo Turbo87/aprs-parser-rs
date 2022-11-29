@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::io::Write;
+use std::ops::RangeInclusive;
 
 use lonlat::{Latitude, Longitude};
 use AprsCompressedCs;
@@ -7,18 +8,6 @@ use AprsCompressionType;
 use AprsError;
 use EncodeError;
 use Timestamp;
-
-#[derive(PartialEq, Debug, Clone)]
-pub struct AprsPosition {
-    pub timestamp: Option<Timestamp>,
-    pub messaging_supported: bool,
-    pub latitude: Latitude,
-    pub longitude: Longitude,
-    pub symbol_table: char,
-    pub symbol_code: char,
-    pub comment: Vec<u8>,
-    pub cst: AprsCst,
-}
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum AprsCst {
@@ -30,39 +19,96 @@ pub enum AprsCst {
     Uncompressed,
 }
 
-impl TryFrom<&[u8]> for AprsPosition {
-    type Error = AprsError;
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+pub enum Precision {
+    TenDegree,
+    OneDegree,
+    TenMinute,
+    OneMinute,
+    TenthMinute,
+    HundredthMinute,
+}
 
-    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        let first = *b
-            .first()
-            .ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
-        let messaging_supported = first == b'=' || first == b'@';
+impl Precision {
+    /// Returns the width of the precision in degrees.
+    /// For example, `Precision::OneDegree` would return 1.0.
+    pub fn width(&self) -> f64 {
+        match self {
+            Precision::HundredthMinute => 1.0 / 6000.0,
+            Precision::TenthMinute => 1.0 / 600.0,
+            Precision::OneMinute => 1.0 / 60.0,
+            Precision::TenMinute => 1.0 / 6.0,
+            Precision::OneDegree => 1.0,
+            Precision::TenDegree => 10.0,
+        }
+    }
 
-        // parse timestamp if necessary
-        let has_timestamp = first == b'@' || first == b'/';
-        let timestamp = if has_timestamp {
-            Some(Timestamp::try_from(
-                b.get(1..8)
-                    .ok_or_else(|| AprsError::InvalidPosition(b.to_vec()))?,
-            )?)
-        } else {
-            None
+    fn range(&self, center: f64) -> RangeInclusive<f64> {
+        let width = self.width();
+
+        (center - (width / 2.0))..=(center + (width / 2.0))
+    }
+
+    pub(crate) fn num_digits(&self) -> u8 {
+        match self {
+            Precision::HundredthMinute => 0,
+            Precision::TenthMinute => 1,
+            Precision::OneMinute => 2,
+            Precision::TenMinute => 3,
+            Precision::OneDegree => 4,
+            Precision::TenDegree => 5,
+        }
+    }
+
+    pub(crate) fn from_num_digits(digits: u8) -> Option<Self> {
+        let res = match digits {
+            0 => Precision::HundredthMinute,
+            1 => Precision::TenthMinute,
+            2 => Precision::OneMinute,
+            3 => Precision::TenMinute,
+            4 => Precision::OneDegree,
+            5 => Precision::TenDegree,
+            _ => return None,
         };
 
-        // strip leading type symbol and potential timestamp
-        let b = if has_timestamp { &b[8..] } else { &b[1..] };
-
-        // check for compressed position format
-        let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
-        match is_uncompressed_position {
-            true => Self::parse_uncompressed(b, timestamp, messaging_supported),
-            false => Self::parse_compressed(b, timestamp, messaging_supported),
-        }
+        Some(res)
     }
 }
 
+impl Default for Precision {
+    fn default() -> Self {
+        Self::HundredthMinute
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct AprsPosition {
+    pub timestamp: Option<Timestamp>,
+    pub messaging_supported: bool,
+
+    /// Latitudes aren't specified precisely in APRS and have ambiguity built in. This value stores the center, but you can also call `AprsPosition::latitude_bounding()` to get the entire range that the actual latitude could be in.
+    pub latitude: Latitude,
+
+    /// Longitudes aren't specified precisely in APRS and have ambiguity built in. This value stores the center, but you can also call `AprsPosition::longitude_bounding()` to get the entire range that the actual longitude could be in.
+    pub longitude: Longitude,
+    pub precision: Precision,
+    pub symbol_table: char,
+    pub symbol_code: char,
+    pub comment: Vec<u8>,
+    pub cst: AprsCst,
+}
+
 impl AprsPosition {
+    /// Latitudes in APRS aren't perfectly precise - they have a configurable level of ambiguity. This is stored in the `precision` field on the `AprsPosition` struct. This method returns a range of what the actual latitude value might be.
+    pub fn latitude_bounding(&self) -> RangeInclusive<f64> {
+        self.precision.range(self.latitude.value())
+    }
+
+    /// Longitudes in APRS aren't perfectly precise - they have a configurable level of ambiguity. This is stored in the `precision` field on the `AprsPosition` struct. This method returns a range of what the actual longitude value might be.
+    pub fn longitude_bounding(&self) -> RangeInclusive<f64> {
+        self.precision.range(self.longitude.value())
+    }
+
     fn parse_compressed(
         b: &[u8],
         timestamp: Option<Timestamp>,
@@ -103,6 +149,7 @@ impl AprsPosition {
             messaging_supported,
             latitude,
             longitude,
+            precision: Precision::default(),
             symbol_table,
             symbol_code,
             comment,
@@ -120,8 +167,8 @@ impl AprsPosition {
         }
 
         // parse position
-        let latitude = Latitude::parse_uncompressed(&b[0..8])?;
-        let longitude = Longitude::parse_uncompressed(&b[9..18])?;
+        let (latitude, precision) = Latitude::parse_uncompressed(&b[0..8])?;
+        let longitude = Longitude::parse_uncompressed(&b[9..18], precision)?;
 
         let symbol_table = b[8] as char;
         let symbol_code = b[18] as char;
@@ -133,6 +180,7 @@ impl AprsPosition {
             messaging_supported,
             latitude,
             longitude,
+            precision,
             symbol_table,
             symbol_code,
             comment,
@@ -162,7 +210,7 @@ impl AprsPosition {
     }
 
     pub fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        self.latitude.encode_uncompressed(buf)?;
+        self.latitude.encode_uncompressed(buf, self.precision)?;
         write!(buf, "{}", self.symbol_table)?;
         self.longitude.encode_uncompressed(buf)?;
         write!(buf, "{}", self.symbol_code)?;
@@ -197,6 +245,38 @@ impl AprsPosition {
     }
 }
 
+impl TryFrom<&[u8]> for AprsPosition {
+    type Error = AprsError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let first = *b
+            .first()
+            .ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
+        let messaging_supported = first == b'=' || first == b'@';
+
+        // parse timestamp if necessary
+        let has_timestamp = first == b'@' || first == b'/';
+        let timestamp = if has_timestamp {
+            Some(Timestamp::try_from(
+                b.get(1..8)
+                    .ok_or_else(|| AprsError::InvalidPosition(b.to_vec()))?,
+            )?)
+        } else {
+            None
+        };
+
+        // strip leading type symbol and potential timestamp
+        let b = if has_timestamp { &b[8..] } else { &b[1..] };
+
+        // check for compressed position format
+        let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
+        match is_uncompressed_position {
+            true => Self::parse_uncompressed(b, timestamp, messaging_supported),
+            false => Self::parse_compressed(b, timestamp, messaging_supported),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +284,13 @@ mod tests {
     use AprsAltitude;
     use AprsCourseSpeed;
     use AprsRadioRange;
+
+    #[test]
+    fn precision_e2e() {
+        for i in 0..6 {
+            assert_eq!(i, Precision::from_num_digits(i).unwrap().num_digits());
+        }
+    }
 
     #[test]
     fn parse_compressed_without_timestamp_or_messaging() {
@@ -321,10 +408,13 @@ mod tests {
 
     #[test]
     fn parse_with_comment() {
-        let result = AprsPosition::try_from(&b"!4903.50N/07201.75W-Hello/A=001000"[..]).unwrap();
+        let result = AprsPosition::try_from(&b"!4903.5 N/07201.75W-Hello/A=001000"[..]).unwrap();
         assert_eq!(result.timestamp, None);
-        assert_relative_eq!(*result.latitude, 49.05833333333333);
-        assert_relative_eq!(*result.longitude, -72.02916666666667);
+        assert_eq!(*result.latitude, 49.05833333333333);
+        assert_eq!(*result.longitude, -72.02833333333334);
+        assert_eq!(Precision::TenthMinute, result.precision);
+        assert_eq!(49.0575..=49.05916666666666, result.latitude_bounding());
+        assert_eq!(-72.02916666666667..=-72.0275, result.longitude_bounding());
         assert_eq!(result.symbol_table, '/');
         assert_eq!(result.symbol_code, '-');
         assert_eq!(result.comment, b"Hello/A=001000");
@@ -385,6 +475,7 @@ mod tests {
             &br"/074849h4821.61N\01224.49E^322/103/A=003054"[..],
             &b"=4903.50N/07201.75W-"[..],
             &br"@074849h4821.61N\01224.49E^322/103/A=003054"[..],
+            &br"@074849h4821.  N\01224.00E^322/103/A=003054"[..],
         ];
 
         for p in positions {

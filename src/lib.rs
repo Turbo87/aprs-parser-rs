@@ -8,7 +8,7 @@
 //! ```rust
 //! extern crate aprs_parser;
 //!
-//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, Callsign, Latitude, Longitude, Timestamp};
+//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, Callsign, Latitude, Longitude, Precision, Timestamp};
 //!
 //! fn main() {
 //!     let result = aprs_parser::parse(
@@ -49,6 +49,7 @@
 //!                         messaging_supported: false,
 //!                         latitude: Latitude::new(48.36016666666667).unwrap(),
 //!                         longitude: Longitude::new(12.408166666666666).unwrap(),
+//!                         precision: Precision::HundredthMinute,
 //!                         symbol_table: '\\',
 //!                         symbol_code: '^',
 //!                         comment: b"322/103/A=003054".to_vec(),
@@ -91,7 +92,7 @@ pub use error::{AprsError, EncodeError};
 pub use lonlat::{Latitude, Longitude};
 pub use message::AprsMessage;
 pub use packet::{AprsData, AprsPacket};
-pub use position::{AprsCst, AprsPosition};
+pub use position::{AprsCst, AprsPosition, Precision};
 pub use timestamp::Timestamp;
 
 pub fn parse(b: &[u8]) -> Result<AprsPacket, AprsError> {

@@ -55,6 +55,7 @@ fn main() {
     //                 messaging_supported: false
     //                 latitude: Latitude(48.360165),
     //                 longitude: Longitude(12.408166),
+	//                 precision: Precision::HundredthMinute,
     //                 symbol_table: '\\',
     //                 symbol_code: '^',
     //                 comment: "322/103/A=003054"
