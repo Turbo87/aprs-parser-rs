@@ -11,13 +11,55 @@ use std::convert::TryFrom;
 use std::io::Write;
 
 use AprsError;
+use DhmTimestamp;
 use EncodeError;
 use Timestamp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsStatus {
-    pub timestamp: Option<Timestamp>,
-    pub comment: Vec<u8>,
+    timestamp: Option<Timestamp>,
+    comment: Vec<u8>,
+}
+
+impl AprsStatus {
+    pub fn new(timestamp: Option<DhmTimestamp>, comment: Vec<u8>) -> Self {
+        let timestamp = timestamp.map(|t| t.into());
+        Self { timestamp, comment }
+    }
+
+    /// According to APRS spec, an AprsStatus should only allow the DDHHMM timestamp. (See page 80 of APRS101.PDF)
+    /// In practice, many encoders don't adhere to this.
+    /// Use this function to create an AprsStatus with any timestamp type
+    pub fn new_noncompliant(timestamp: Option<Timestamp>, comment: Vec<u8>) -> Self {
+        Self { timestamp, comment }
+    }
+
+    pub fn is_timestamp_compliant(&self) -> bool {
+        self.timestamp
+            .as_ref()
+            .map(|t| matches!(t, Timestamp::DDHHMM(_, _, _)))
+            .unwrap_or(true)
+    }
+
+    pub fn timestamp(&self) -> Option<&Timestamp> {
+        self.timestamp.as_ref()
+    }
+
+    pub fn comment(&self) -> &[u8] {
+        &self.comment
+    }
+
+    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        write!(buf, ">")?;
+
+        if let Some(ts) = &self.timestamp {
+            ts.encode(buf)?;
+        }
+
+        buf.write_all(&self.comment)?;
+
+        Ok(())
+    }
 }
 
 impl TryFrom<&[u8]> for AprsStatus {
@@ -33,20 +75,6 @@ impl TryFrom<&[u8]> for AprsStatus {
             timestamp,
             comment: comment.to_owned(),
         })
-    }
-}
-
-impl AprsStatus {
-    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        write!(buf, ">")?;
-
-        if let Some(ts) = &self.timestamp {
-            ts.encode(buf)?;
-        }
-
-        buf.write_all(&self.comment)?;
-
-        Ok(())
     }
 }
 
@@ -80,5 +108,26 @@ mod tests {
         let result = AprsStatus::try_from(r"235959hHi there!".as_bytes()).unwrap();
         assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(23, 59, 59)));
         assert_eq!(result.comment, b"Hi there!");
+    }
+
+    #[test]
+    fn compliant_time_is_compliant() {
+        let result = AprsStatus::try_from(r"312359z".as_bytes()).unwrap();
+        assert_eq!(result.timestamp, Some(Timestamp::DDHHMM(31, 23, 59)));
+        assert!(result.is_timestamp_compliant());
+    }
+
+    #[test]
+    fn uncompliant_time_is_not_compliant() {
+        let result = AprsStatus::try_from(r"235959hHi there!".as_bytes()).unwrap();
+        assert_eq!(result.timestamp, Some(Timestamp::HHMMSS(23, 59, 59)));
+        assert!(!result.is_timestamp_compliant());
+    }
+
+    #[test]
+    fn missing_time_is_compliant() {
+        let result = AprsStatus::try_from(&b"Hi there!"[..]).unwrap();
+        assert_eq!(result.timestamp, None);
+        assert!(result.is_timestamp_compliant());
     }
 }

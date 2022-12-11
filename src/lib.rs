@@ -95,7 +95,7 @@ pub use message::AprsMessage;
 pub use packet::{AprsData, AprsPacket};
 pub use position::{AprsCst, AprsPosition, Precision};
 pub use status::AprsStatus;
-pub use timestamp::Timestamp;
+pub use timestamp::{DhmTimestamp, Timestamp};
 
 pub fn parse(b: &[u8]) -> Result<AprsPacket, AprsError> {
     AprsPacket::try_from(b)

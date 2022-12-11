@@ -5,6 +5,35 @@ use std::io::Write;
 use AprsError;
 use EncodeError;
 
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+pub struct DhmTimestamp(u8, u8, u8);
+
+/// Day of month, Hour and Minute in UTC
+impl DhmTimestamp {
+    pub fn new(d: u8, h: u8, m: u8) -> Option<Self> {
+        // We could theoretically be more restrictive here
+        // Is (0, 24, 0) invalid or is it the same as
+        // (1, 0, 0)?
+        if d <= 99 && h <= 99 && m <= 99 {
+            Some(Self(d, h, m))
+        } else {
+            None
+        }
+    }
+}
+
+impl TryFrom<Timestamp> for DhmTimestamp {
+    type Error = ();
+
+    fn try_from(t: Timestamp) -> Result<Self, ()> {
+        if let Timestamp::DDHHMM(d, h, m) = t {
+            Ok(Self(d, h, m))
+        } else {
+            Err(())
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum Timestamp {
     /// Day of month, Hour and Minute in UTC
@@ -16,6 +45,24 @@ pub enum Timestamp {
 }
 
 impl Timestamp {
+    /// Day of month, Hour and Minute in UTC
+    pub fn new_dhm(d: u8, h: u8, m: u8) -> Option<Self> {
+        if d <= 99 && h <= 99 && m <= 99 {
+            Some(Self::DDHHMM(d, h, m))
+        } else {
+            None
+        }
+    }
+
+    /// Hour, Minute and Second in UTC
+    pub fn new_hms(h: u8, m: u8, s: u8) -> Option<Self> {
+        if h <= 99 && m <= 99 && s <= 99 {
+            Some(Self::HHMMSS(h, m, s))
+        } else {
+            None
+        }
+    }
+
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         match self {
             Self::DDHHMM(d, h, m) => write!(buf, "{:02}{:02}{:02}z", d, h, m)?,
@@ -49,6 +96,12 @@ impl TryFrom<&[u8]> for Timestamp {
             b'h' | b'H' => Timestamp::HHMMSS(one, two, three),
             _ => return Err(AprsError::InvalidTimestamp(b.to_owned())),
         })
+    }
+}
+
+impl From<DhmTimestamp> for Timestamp {
+    fn from(t: DhmTimestamp) -> Self {
+        Self::DDHHMM(t.0, t.1, t.2)
     }
 }
 
@@ -127,5 +180,31 @@ mod tests {
             .encode(&mut buf)
             .unwrap();
         assert_eq!(b"135a67z"[..], buf);
+    }
+
+    #[test]
+    fn convert_dhm_timestamp_to_normal_timestamp() {
+        let timestamp: Timestamp = DhmTimestamp::new(12, 34, 56).unwrap().into();
+        assert_eq!(Timestamp::new_dhm(12, 34, 56).unwrap(), timestamp);
+    }
+
+    #[test]
+    fn convert_timestamp_to_dhm_timestamp_success() {
+        use std::convert::TryInto;
+
+        let timestamp = Timestamp::new_dhm(65, 43, 21).unwrap();
+        assert_eq!(
+            DhmTimestamp::new(65, 43, 21).unwrap(),
+            timestamp.try_into().unwrap()
+        );
+    }
+
+    #[test]
+    fn convert_timestamp_to_dhm_timestamp_failure() {
+        use std::convert::TryInto;
+
+        let timestamp = Timestamp::new_hms(65, 43, 21).unwrap();
+        let dhm: Result<DhmTimestamp, ()> = timestamp.try_into();
+        assert_eq!(Err(()), dhm);
     }
 }

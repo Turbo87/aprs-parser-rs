@@ -177,8 +177,8 @@ mod tests {
 
         match result.data {
             AprsData::Status(msg) => {
-                assert_eq!(msg.timestamp, Some(Timestamp::DDHHMM(31, 23, 59)));
-                assert_eq!(msg.comment, b"Status seems okay!");
+                assert_eq!(msg.timestamp(), Some(&Timestamp::DDHHMM(31, 23, 59)));
+                assert_eq!(msg.comment(), b"Status seems okay!");
             }
             _ => panic!("Unexpected data type"),
         }
