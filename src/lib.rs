@@ -81,6 +81,7 @@ mod lonlat;
 mod message;
 mod packet;
 mod position;
+mod status;
 mod timestamp;
 
 use std::convert::TryFrom;
@@ -93,7 +94,8 @@ pub use lonlat::{Latitude, Longitude};
 pub use message::AprsMessage;
 pub use packet::{AprsData, AprsPacket};
 pub use position::{AprsCst, AprsPosition, Precision};
-pub use timestamp::Timestamp;
+pub use status::AprsStatus;
+pub use timestamp::{DhmTimestamp, Timestamp};
 
 pub fn parse(b: &[u8]) -> Result<AprsPacket, AprsError> {
     AprsPacket::try_from(b)
