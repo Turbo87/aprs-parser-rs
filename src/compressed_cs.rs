@@ -90,7 +90,7 @@ impl AprsCourseSpeed {
 
     fn from_cs(c: u8, s: u8) -> Self {
         let course_degrees = c as u16 * 4;
-        let speed_knots = ((1.08_f64).powi(s as i32) - 1.0) as f64;
+        let speed_knots = (1.08_f64).powi(s as i32) - 1.0;
 
         debug_assert!(course_degrees <= 360);
         debug_assert!(speed_knots < (1.08_f64).powi(255));
@@ -127,7 +127,7 @@ impl AprsRadioRange {
 
     fn from_s(s: u8) -> Self {
         Self {
-            range_miles: (2.0 * (1.08_f64).powi(s as i32)) as f64,
+            range_miles: 2.0 * (1.08_f64).powi(s as i32),
         }
     }
 
@@ -156,7 +156,7 @@ impl AprsAltitude {
 
     fn from_cs(c: u8, s: u8) -> Self {
         Self {
-            altitude_feet: ((1.002_f64).powi(c as i32 * 91 + s as i32)) as f64,
+            altitude_feet: (1.002_f64).powi(c as i32 * 91 + s as i32),
         }
     }
 
