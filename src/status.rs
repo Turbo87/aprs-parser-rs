@@ -10,7 +10,7 @@
 use std::convert::TryFrom;
 use std::io::Write;
 
-use AprsError;
+use DecodeError;
 use DhmTimestamp;
 use EncodeError;
 use Timestamp;
@@ -63,7 +63,7 @@ impl AprsStatus {
 }
 
 impl TryFrom<&[u8]> for AprsStatus {
-    type Error = AprsError;
+    type Error = DecodeError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         // Interpret the first 7 bytes as a timestamp, if valid.

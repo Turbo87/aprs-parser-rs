@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         rust:
-          - 1.52.0  # minimum supported version
+          - 1.60.0  # minimum supported version
           - stable
 
     steps:
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: rustup default 1.57.0
+      - run: rustup default 1.67.1
       - run: rustup component add rustfmt
       - run: cargo fmt -- --check
 
@@ -41,6 +41,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: rustup default 1.57.0
+      - run: rustup default 1.67.1
       - run: rustup component add clippy
       - run: cargo clippy --all-targets --all-features -- -D warnings

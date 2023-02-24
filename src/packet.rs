@@ -1,50 +1,65 @@
 use std::convert::TryFrom;
 use std::io::Write;
 
-use AprsError;
+use callsign::CallsignField;
 use AprsMessage;
 use AprsPosition;
 use AprsStatus;
 use Callsign;
+use DecodeError;
 use EncodeError;
+use Via;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPacket {
     pub from: Callsign,
     pub to: Callsign,
-    pub via: Vec<Callsign>,
+    pub via: Vec<Via>,
     pub data: AprsData,
 }
 
-impl TryFrom<&[u8]> for AprsPacket {
-    type Error = AprsError;
-
-    fn try_from(s: &[u8]) -> Result<Self, Self::Error> {
+impl AprsPacket {
+    pub fn decode_textual(s: &[u8]) -> Result<Self, DecodeError> {
         let header_delimiter = s
             .iter()
             .position(|x| *x == b':')
-            .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
+            .ok_or_else(|| DecodeError::InvalidPacket(s.to_owned()))?;
         let (header, rest) = s.split_at(header_delimiter);
         let body = &rest[1..];
 
         let from_delimiter = header
             .iter()
             .position(|x| *x == b'>')
-            .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
+            .ok_or_else(|| DecodeError::InvalidPacket(s.to_owned()))?;
         let (from, rest) = header.split_at(from_delimiter);
-        let from = Callsign::try_from(from)?;
+        let (from, _) = Callsign::decode_textual(from)
+            .ok_or_else(|| DecodeError::InvalidCallsign(from.to_owned()))?;
 
         let to_and_via = &rest[1..];
         let mut to_and_via = to_and_via.split(|x| *x == b',');
 
         let to = to_and_via
             .next()
-            .ok_or_else(|| AprsError::InvalidPacket(s.to_owned()))?;
-        let to = Callsign::try_from(to)?;
+            .ok_or_else(|| DecodeError::InvalidPacket(s.to_owned()))?;
+        let (to, _) = Callsign::decode_textual(to)
+            .ok_or_else(|| DecodeError::InvalidCallsign(to.to_owned()))?;
 
         let mut via = vec![];
         for v in to_and_via {
-            via.push(Callsign::try_from(v)?);
+            via.push(Via::decode_textual(v).ok_or_else(|| DecodeError::InvalidVia(v.to_owned()))?);
+        }
+
+        // if our Via path looks like A,B,C*,D,E
+        // this really means A*,B*,C*,D,E
+        // so we need to propagate the `heard` flag backwards
+        let mut heard = false;
+        for v in via.iter_mut().rev() {
+            if let Some((_, c_heard)) = v.callsign_mut() {
+                if !heard {
+                    heard = *c_heard;
+                }
+                *c_heard = heard;
+            }
         }
 
         let data = AprsData::try_from(body)?;
@@ -56,15 +71,113 @@ impl TryFrom<&[u8]> for AprsPacket {
             data,
         })
     }
-}
 
-impl AprsPacket {
-    pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        write!(buf, "{}>{}", self.from, self.to)?;
-        for v in &self.via {
-            write!(buf, ",{}", v)?;
+    /// Used for encoding a packet into ASCII for transmission on the internet (APRS-IS)
+    pub fn encode_textual<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        // logic to clear extraneous asterisks
+        let mut via = self.via.clone();
+        let mut heard = false;
+        for v in via.iter_mut().rev() {
+            if let Some((_, c_heard)) = v.callsign_mut() {
+                if !heard {
+                    heard = *c_heard;
+                } else {
+                    *c_heard = false;
+                }
+            }
+        }
+
+        self.from.encode_textual(false, buf)?;
+        write!(buf, ">")?;
+        self.to.encode_textual(false, buf)?;
+        for v in &via {
+            write!(buf, ",")?;
+            v.encode_textual(buf)?;
         }
         write!(buf, ":")?;
+        self.data.encode(buf)?;
+
+        Ok(())
+    }
+
+    /// Used for decoding a packet received over the air (via KISS or otherwise)
+    pub fn decode_ax25(data: &[u8]) -> Result<Self, DecodeError> {
+        let dest_bytes = data
+            .get(0..7)
+            .ok_or_else(|| DecodeError::InvalidPacket(data.to_owned()))?;
+        let (to, _, has_more) = Callsign::decode_ax25(dest_bytes)
+            .ok_or_else(|| DecodeError::InvalidCallsign(dest_bytes.to_owned()))?;
+
+        if !has_more {
+            return Err(DecodeError::InvalidPacket(data.to_owned()));
+        }
+
+        let src_bytes = data
+            .get(7..14)
+            .ok_or_else(|| DecodeError::InvalidPacket(data.to_owned()))?;
+        let (from, _, mut has_more) = Callsign::decode_ax25(src_bytes)
+            .ok_or_else(|| DecodeError::InvalidCallsign(src_bytes.to_owned()))?;
+
+        let mut i = 14;
+        let mut via = vec![];
+        while has_more {
+            let v_bytes = data
+                .get(i..(i + 7))
+                .ok_or_else(|| DecodeError::InvalidPacket(data.to_owned()))?;
+
+            // vias received over AX.25 are going to be callsigns only
+            // no Q-constructs
+            let (v, heard, more) = Callsign::decode_ax25(v_bytes)
+                .ok_or_else(|| DecodeError::InvalidCallsign(v_bytes.to_owned()))?;
+
+            via.push(Via::Callsign(v, heard));
+            has_more = more;
+            i += 7;
+        }
+
+        // verify control field and protocol id
+        if data.get(i..(i + 2)) != Some(&[0x03, 0xf0]) {
+            return Err(DecodeError::InvalidPacket(data.to_owned()));
+        }
+        i += 2;
+
+        // remainder is the information field
+        let data = AprsData::try_from(data.get(i..).unwrap_or(&[]))?;
+
+        Ok(Self {
+            data,
+            from,
+            to,
+            via,
+        })
+    }
+
+    /// Used for encoding a packet for transmission on the air (via KISS or otherwise)
+    pub fn encode_ax25<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        // Destination address
+        self.to.encode_ax25(buf, CallsignField::Destination, true)?;
+
+        let via_calls: Vec<_> = self.via.iter().filter_map(|v| v.callsign()).collect();
+
+        // Source address
+        let has_more = !via_calls.is_empty();
+        self.from
+            .encode_ax25(buf, CallsignField::Source, has_more)?;
+
+        // Digipeater addresses
+        if let Some(((last_v, last_heard), vs)) = via_calls.split_last() {
+            for (v, heard) in vs {
+                v.encode_ax25(buf, CallsignField::Via(*heard), true)?;
+            }
+
+            last_v.encode_ax25(buf, CallsignField::Via(*last_heard), false)?;
+        }
+
+        // Control field - hardcoded to UI
+        // Protocol ID - hardcoded to no layer 3
+        buf.write_all(&[0x03, 0xf0])?;
+
+        // Information field
         self.data.encode(buf)?;
 
         Ok(())
@@ -80,9 +193,9 @@ pub enum AprsData {
 }
 
 impl TryFrom<&[u8]> for AprsData {
-    type Error = AprsError;
+    type Error = DecodeError;
 
-    fn try_from(s: &[u8]) -> Result<Self, AprsError> {
+    fn try_from(s: &[u8]) -> Result<Self, DecodeError> {
         Ok(match *s.first().unwrap_or(&0) {
             b':' => AprsData::Message(AprsMessage::try_from(&s[1..])?),
             b'!' | b'/' | b'=' | b'@' => AprsData::Position(AprsPosition::try_from(s)?),
@@ -114,16 +227,20 @@ impl AprsData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use QConstruct;
     use Timestamp;
 
     #[test]
     fn parse() {
-        let result = AprsPacket::try_from(r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".as_bytes()).unwrap();
-        assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
-        assert_eq!(result.to, Callsign::new("APRS", None));
+        let result = AprsPacket::decode_textual(r"ID17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1".as_bytes()).unwrap();
+        assert_eq!(result.from, Callsign::new_no_ssid("ID17F2"));
+        assert_eq!(result.to, Callsign::new_no_ssid("APRS"));
         assert_eq!(
             result.via,
-            vec![Callsign::new("qAS", None), Callsign::new("dl4mea", None),]
+            vec![
+                Via::QConstruct(QConstruct::AS),
+                Via::Callsign(Callsign::new_no_ssid("dl4mea"), false),
+            ]
         );
 
         match result.data {
@@ -142,15 +259,18 @@ mod tests {
 
     #[test]
     fn parse_message() {
-        let result = AprsPacket::try_from(
-            &b"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {3a2B975"[..],
+        let result = AprsPacket::decode_textual(
+            &b"IC17F2>Aprs,qAX,dl4mea::DEST     :Hello World! This msg has a : colon {3a2B975"[..],
         )
         .unwrap();
-        assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
-        assert_eq!(result.to, Callsign::new("Aprs", None));
+        assert_eq!(result.from, Callsign::new_no_ssid("IC17F2"));
+        assert_eq!(result.to, Callsign::new_no_ssid("Aprs"));
         assert_eq!(
             result.via,
-            vec![Callsign::new("qAS", None), Callsign::new("dl4mea", None),]
+            vec![
+                Via::QConstruct(QConstruct::AX),
+                Via::Callsign(Callsign::new_no_ssid("dl4mea"), false),
+            ]
         );
 
         match result.data {
@@ -166,13 +286,16 @@ mod tests {
     #[test]
     fn parse_status() {
         let result =
-            AprsPacket::try_from(&b"ICA3D17F2>APRS,qAS,dl4mea:>312359zStatus seems okay!"[..])
+            AprsPacket::decode_textual(&b"3D17F2>APRS,qAU,dl4mea:>312359zStatus seems okay!"[..])
                 .unwrap();
-        assert_eq!(result.from, Callsign::new("ICA3D17F2", None));
-        assert_eq!(result.to, Callsign::new("APRS", None));
+        assert_eq!(result.from, Callsign::new_no_ssid("3D17F2"));
+        assert_eq!(result.to, Callsign::new_no_ssid("APRS"));
         assert_eq!(
             result.via,
-            vec![Callsign::new("qAS", None), Callsign::new("dl4mea", None),]
+            vec![
+                Via::QConstruct(QConstruct::AU),
+                Via::Callsign(Callsign::new_no_ssid("dl4mea"), false),
+            ]
         );
 
         match result.data {
@@ -185,36 +308,143 @@ mod tests {
     }
 
     #[test]
+    fn encode_ax25_basic() {
+        let encoded_ax25 = vec![
+            0x82, 0xa0, 0x9c, 0xaa, 0x62, 0x72, 0xe0, 0xac, 0x8a, 0x72, 0x84, 0x86, 0xa2, 0x60,
+            0xac, 0x8a, 0x72, 0x88, 0x8e, 0xa0, 0xe0, 0xac, 0x8a, 0x72, 0x8e, 0x8c, 0x92, 0xe4,
+            0xac, 0x8a, 0x72, 0x8c, 0xa0, 0x8e, 0xe0, 0xae, 0x92, 0x88, 0x8a, 0x66, 0x40, 0x61,
+            0x03, 0xf0, 0x21, 0x34, 0x36, 0x32, 0x37, 0x2e, 0x32, 0x30, 0x4e, 0x53, 0x30, 0x36,
+            0x36, 0x33, 0x31, 0x2e, 0x31, 0x39, 0x57, 0x23, 0x50, 0x48, 0x47, 0x35, 0x34, 0x36,
+            0x30, 0x2f, 0x57, 0x33, 0x20, 0x4d, 0x41, 0x52, 0x43, 0x41, 0x4e, 0x20, 0x55, 0x49,
+            0x44, 0x49, 0x47, 0x49, 0x20, 0x42, 0x4f, 0x49, 0x45, 0x53, 0x54, 0x4f, 0x57, 0x4e,
+            0x2c, 0x20, 0x4e, 0x42,
+        ];
+
+        let encoded_ascii = b"VE9BCQ>APNU19,VE9DGP,VE9GFI-2,VE9FPG*,WIDE3:!4627.20NS06631.19W#PHG5460/W3 MARCAN UIDIGI BOIESTOWN, NB";
+
+        // ascii -> ax25
+        let decoded_from_ascii = AprsPacket::decode_textual(&encoded_ascii[..]).unwrap();
+        let mut actual_ax25 = vec![];
+        decoded_from_ascii.encode_ax25(&mut actual_ax25).unwrap();
+        assert_eq!(encoded_ax25, actual_ax25);
+
+        // ax25 -> ascii
+        let decoded_from_ax25 = AprsPacket::decode_ax25(&encoded_ax25).unwrap();
+        let mut actual_ascii = vec![];
+        decoded_from_ax25.encode_textual(&mut actual_ascii).unwrap();
+        assert_eq!(encoded_ascii[..], actual_ascii);
+
+        // both -> packet
+        assert_eq!(decoded_from_ascii, decoded_from_ax25);
+    }
+
+    #[test]
     fn e2e_serialize_deserialize() {
         let valids = vec![
-            r"ICA3D17F2>APRS,qAS,dl4mea:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
-            r"ICA3D17F2>APRS,qAS,dl4mea:@074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
-            r"ICA3D17F2>APRS,qAS,dl4mea:!4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
-            r"ICA3D17F2>APRS,qAS,dl4mea:!48  .  N\01200.00E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
-            r"ICA3D17F2>APRS,qAS,dl4mea:=4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
-            r"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has a : colon {32975",
-            r"ICA3D17F2>Aprs,qAS,dl4mea::DESTINATI:Hello World! This msg has a : colon ",
-            r"ICA3D17F2>APRS,qAS,dl4mea:>312359zStatus seems okay!",
-            r"ICA3D17F2>APRS,qAS,dl4mea:>184050hAlso with HMS format...",
+            r"3D17F2>APRS,qAS,DL4MEA:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,qAS,DL4MEA:@074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ID17F2>APRS,qAS,DL4MEA:!4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,qAS,DL4MEA:!48  .  N\01200.00E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,qAS,DL4MEA:=4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ID17F2>APRS,qAS,DL4MEA::DEST     :Hello World! This msg has a : colon {32975",
+            r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
+            r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
+            r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
         ];
 
         for v in valids {
             let mut buf = vec![];
-            AprsPacket::try_from(v.as_bytes())
-                .unwrap()
-                .encode(&mut buf)
-                .unwrap();
-            assert_eq!(buf, v.as_bytes())
+            let packet = AprsPacket::decode_textual(v.as_bytes()).unwrap();
+            packet.encode_textual(&mut buf).unwrap();
+            assert_eq!(buf, v.as_bytes());
+        }
+    }
+
+    #[test]
+    fn e2e_serialize_deserialize_ax25() {
+        let originals = vec![
+            r"3D17F2>APRS,qAS,DL4MEA*:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,qAS,DL4MEA:@074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ID17F2>APRS,qAS,dl4mea:!4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,qAS,DL4MEA:!48  .  N\01200.00E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,qAS,DL4MEA:=4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ID17F2>APRS,qAS,DL4MEA::DEST     :Hello World! This msg has a : colon {32975",
+            r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
+            r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
+            r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
+            // 0 to 8 via callsigns
+            r"ICA3F2>APRS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIJ,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIJ,KLM,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,NIJ,KLM,QRZ,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIK,ASD,NADL,ASKJ,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIK,ASD,NADL,ASKJ,SDKKA,qAS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIK,ASD,NADL,ASKJ,SDKKA,ABC,qAS:>184050hAlso with HMS format...",
+        ];
+
+        // capitalized and q-codes removed
+        let expected = vec![
+            r"3D17F2>APRS,DL4MEA*:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,DL4MEA:@074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ID17F2>APRS,DL4MEA:!4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,DL4MEA:!48  .  N\01200.00E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"3D17F2>APRS,DL4MEA:=4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
+            r"ID17F2>APRS,DL4MEA::DEST     :Hello World! This msg has a : colon {32975",
+            r"IC17F2>APRS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
+            r"ICA7F2>APRS,DL4MEA:>312359zStatus seems okay!",
+            r"ICA3F2>APRS,DL4MEA:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIJ:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIJ,KLM:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,NIJ,KLM,QRZ:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIK,ASD,NADL,ASKJ:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIK,ASD,NADL,ASKJ,SDKKA:>184050hAlso with HMS format...",
+            r"ICA3F2>APRS,ABC,DEF,HIK,ASD,NADL,ASKJ,SDKKA,ABC:>184050hAlso with HMS format...",
+        ];
+
+        for (o, e) in originals.iter().zip(expected.iter()) {
+            let o_packet = AprsPacket::decode_textual(o.as_bytes()).unwrap();
+
+            let mut o_ax25 = vec![];
+            o_packet.encode_ax25(&mut o_ax25).unwrap();
+            let o_pkt_from_ax25 = AprsPacket::decode_ax25(&o_ax25).unwrap();
+
+            let mut o_re_encoded = vec![];
+            o_pkt_from_ax25.encode_textual(&mut o_re_encoded).unwrap();
+
+            // text -> packet -> ax25 -> packet -> text
+            assert_eq!(
+                e.as_bytes(),
+                o_re_encoded,
+                "\n{}\n{}",
+                e,
+                String::from_utf8_lossy(&o_re_encoded)
+            );
+
+            // o(text) -> packet -> ax25
+            // VS.
+            // e(text) -> packet -> ax25
+            let e_packet = AprsPacket::decode_textual(e.as_bytes()).unwrap();
+            let mut e_ax25 = vec![];
+            e_packet.encode_ax25(&mut e_ax25).unwrap();
+
+            assert_eq!(e_ax25, o_ax25);
         }
     }
 
     #[test]
     fn e2e_invalid_string_msg() {
-        let original = b"ICA3D17F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has raw bytes that are invalid utf8! \xc3\x28 {32975";
+        let original = b"ICA7F2>Aprs,qAS,dl4mea::DEST     :Hello World! This msg has raw bytes that are invalid utf8! \xc3\x28 {32975";
 
         let mut buf = vec![];
-        let decoded = AprsPacket::try_from(&original[..]).unwrap();
-        decoded.encode(&mut buf).unwrap();
+        let decoded = AprsPacket::decode_textual(&original[..]).unwrap();
+        decoded.encode_textual(&mut buf).unwrap();
         assert_eq!(buf, original);
     }
 }

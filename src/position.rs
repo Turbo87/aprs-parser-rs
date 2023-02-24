@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 use lonlat::{Latitude, Longitude};
 use AprsCompressedCs;
 use AprsCompressionType;
-use AprsError;
+use DecodeError;
 use EncodeError;
 use Timestamp;
 
@@ -113,9 +113,9 @@ impl AprsPosition {
         b: &[u8],
         timestamp: Option<Timestamp>,
         messaging_supported: bool,
-    ) -> Result<Self, AprsError> {
+    ) -> Result<Self, DecodeError> {
         if b.len() < 13 {
-            return Err(AprsError::InvalidPosition(b.to_owned()));
+            return Err(DecodeError::InvalidPosition(b.to_owned()));
         }
 
         let symbol_table = b[0] as char;
@@ -135,7 +135,7 @@ impl AprsPosition {
             _ => {
                 let t = comp_type
                     .checked_sub(33)
-                    .ok_or_else(|| AprsError::InvalidPosition(b.to_owned()))?
+                    .ok_or_else(|| DecodeError::InvalidPosition(b.to_owned()))?
                     .into();
                 let cs = AprsCompressedCs::parse(course_speed[0], course_speed[1], t)?;
                 AprsCst::CompressedSome { cs, t }
@@ -161,9 +161,9 @@ impl AprsPosition {
         b: &[u8],
         timestamp: Option<Timestamp>,
         messaging_supported: bool,
-    ) -> Result<Self, AprsError> {
+    ) -> Result<Self, DecodeError> {
         if b.len() < 19 {
-            return Err(AprsError::InvalidPosition(b.to_owned()));
+            return Err(DecodeError::InvalidPosition(b.to_owned()));
         }
 
         // parse position
@@ -246,12 +246,12 @@ impl AprsPosition {
 }
 
 impl TryFrom<&[u8]> for AprsPosition {
-    type Error = AprsError;
+    type Error = DecodeError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         let first = *b
             .first()
-            .ok_or_else(|| AprsError::InvalidPosition(vec![]))?;
+            .ok_or_else(|| DecodeError::InvalidPosition(vec![]))?;
         let messaging_supported = first == b'=' || first == b'@';
 
         // parse timestamp if necessary
@@ -259,7 +259,7 @@ impl TryFrom<&[u8]> for AprsPosition {
         let timestamp = if has_timestamp {
             Some(Timestamp::try_from(
                 b.get(1..8)
-                    .ok_or_else(|| AprsError::InvalidPosition(b.to_vec()))?,
+                    .ok_or_else(|| DecodeError::InvalidPosition(b.to_vec()))?,
             )?)
         } else {
             None

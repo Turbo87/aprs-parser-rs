@@ -1,11 +1,11 @@
+use Callsign;
+
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum AprsError {
-    #[error("Non-UTF8 Callsign: {0:?}")]
-    NonUtf8Callsign(Vec<u8>),
-    #[error("Empty Callsign: {0:?}")]
-    EmptyCallsign(String),
-    #[error("Empty Callsign SSID: {0:?}")]
-    EmptySSID(String),
+pub enum DecodeError {
+    #[error("Invalid Callsign: {0:?}")]
+    InvalidCallsign(Vec<u8>),
+    #[error("Invalid Via: {0:?}")]
+    InvalidVia(Vec<u8>),
     #[error("Invalid Timestamp: {0:?}")]
     InvalidTimestamp(Vec<u8>),
     #[error("Unsupported Position Format: {0:?}")]
@@ -28,6 +28,8 @@ pub enum AprsError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum EncodeError {
+    #[error("Callsign can't be encoded: {0:?}")]
+    InvalidCallsign(Callsign),
     #[error("Invalid Latitude: {0}")]
     InvalidLatitude(f64),
     #[error("Invalid Longitude: {0}")]
