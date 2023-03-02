@@ -3,7 +3,7 @@ use std::io::Write;
 use base91;
 use compression_type::NmeaSource;
 use AprsCompressionType;
-use AprsError;
+use DecodeError;
 use EncodeError;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -14,9 +14,9 @@ pub enum AprsCompressedCs {
 }
 
 impl AprsCompressedCs {
-    pub(crate) fn parse(c: u8, s: u8, t: AprsCompressionType) -> Result<Self, AprsError> {
-        let c_lwr = base91::digit_from_ascii(c).ok_or(AprsError::InvalidCs([c, s]))?;
-        let s_lwr = base91::digit_from_ascii(s).ok_or(AprsError::InvalidCs([c, s]))?;
+    pub(crate) fn parse(c: u8, s: u8, t: AprsCompressionType) -> Result<Self, DecodeError> {
+        let c_lwr = base91::digit_from_ascii(c).ok_or(DecodeError::InvalidCs([c, s]))?;
+        let s_lwr = base91::digit_from_ascii(s).ok_or(DecodeError::InvalidCs([c, s]))?;
 
         if t.nmea_source == NmeaSource::Gga {
             Ok(AprsCompressedCs::Altitude(AprsAltitude::from_cs(
@@ -26,7 +26,7 @@ impl AprsCompressedCs {
             let val = match c_lwr {
                 0..=89 => AprsCompressedCs::CourseSpeed(AprsCourseSpeed::from_cs(c_lwr, s_lwr)),
                 90 => AprsCompressedCs::RadioRange(AprsRadioRange::from_s(s_lwr)),
-                _ => return Err(AprsError::InvalidCs([c, s])),
+                _ => return Err(DecodeError::InvalidCs([c, s])),
             };
 
             Ok(val)

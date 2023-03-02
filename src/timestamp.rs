@@ -2,7 +2,7 @@ use bytes::parse_bytes;
 use std::convert::TryFrom;
 use std::io::Write;
 
-use AprsError;
+use DecodeError;
 use EncodeError;
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
@@ -75,26 +75,28 @@ impl Timestamp {
 }
 
 impl TryFrom<&[u8]> for Timestamp {
-    type Error = AprsError;
+    type Error = DecodeError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         if b.len() != 7 {
-            return Err(AprsError::InvalidTimestamp(b.to_owned()));
+            return Err(DecodeError::InvalidTimestamp(b.to_owned()));
         }
 
         if b[6] == b'/' {
             return Ok(Timestamp::Unsupported(b.to_owned()));
         }
 
-        let one = parse_bytes(&b[0..2]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
-        let two = parse_bytes(&b[2..4]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
+        let one =
+            parse_bytes(&b[0..2]).ok_or_else(|| DecodeError::InvalidTimestamp(b.to_owned()))?;
+        let two =
+            parse_bytes(&b[2..4]).ok_or_else(|| DecodeError::InvalidTimestamp(b.to_owned()))?;
         let three =
-            parse_bytes(&b[4..6]).ok_or_else(|| AprsError::InvalidTimestamp(b.to_owned()))?;
+            parse_bytes(&b[4..6]).ok_or_else(|| DecodeError::InvalidTimestamp(b.to_owned()))?;
 
         Ok(match b[6] {
             b'z' | b'Z' => Timestamp::DDHHMM(one, two, three),
             b'h' | b'H' => Timestamp::HHMMSS(one, two, three),
-            _ => return Err(AprsError::InvalidTimestamp(b.to_owned())),
+            _ => return Err(DecodeError::InvalidTimestamp(b.to_owned())),
         })
     }
 }
@@ -147,7 +149,7 @@ mod tests {
     fn invalid_timestamp() {
         assert_eq!(
             Timestamp::try_from(&b"1234567"[..]),
-            Err(AprsError::InvalidTimestamp(b"1234567".to_vec()))
+            Err(DecodeError::InvalidTimestamp(b"1234567".to_vec()))
         );
     }
 
@@ -155,7 +157,7 @@ mod tests {
     fn invalid_timestamp2() {
         assert_eq!(
             Timestamp::try_from(&b"123a56z"[..]),
-            Err(AprsError::InvalidTimestamp(b"123a56z".to_vec()))
+            Err(DecodeError::InvalidTimestamp(b"123a56z".to_vec()))
         );
     }
 

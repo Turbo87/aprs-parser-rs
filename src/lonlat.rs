@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 use base91;
 use bytes::parse_bytes;
-use AprsError;
+use DecodeError;
 use EncodeError;
 use Precision;
 
@@ -34,15 +34,15 @@ impl Latitude {
         self.0
     }
 
-    pub(crate) fn parse_uncompressed(b: &[u8]) -> Result<(Self, Precision), AprsError> {
+    pub(crate) fn parse_uncompressed(b: &[u8]) -> Result<(Self, Precision), DecodeError> {
         if b.len() != 8 || b[4] != b'.' {
-            return Err(AprsError::InvalidLatitude(b.to_owned()));
+            return Err(DecodeError::InvalidLatitude(b.to_owned()));
         }
 
         let north = match b[7] {
             b'N' => true,
             b'S' => false,
-            _ => return Err(AprsError::InvalidLatitude(b.to_owned())),
+            _ => return Err(DecodeError::InvalidLatitude(b.to_owned())),
         };
 
         // Some APRS lats have trailing spaces
@@ -50,32 +50,33 @@ impl Latitude {
         // Once we encounter a space, the remainder must be spaces
         let mut total_spaces = 0;
         let (deg, num_spaces) = parse_bytes_trailing_spaces(&[b[0], b[1]], false)
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+            .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
         total_spaces += num_spaces;
         let (min, num_spaces) = parse_bytes_trailing_spaces(&[b[2], b[3]], num_spaces > 0)
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+            .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
         total_spaces += num_spaces;
         let (min_frac, num_spaces) = parse_bytes_trailing_spaces(&[b[5], b[6]], num_spaces > 0)
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+            .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
         total_spaces += num_spaces;
 
         let precision = Precision::from_num_digits(total_spaces)
-            .ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+            .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
 
         let value = deg as f64 + min as f64 / 60. + min_frac as f64 / 6_000.;
         let value = if north { value } else { -value };
 
-        let lat = Self::new(value).ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?;
+        let lat = Self::new(value).ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
 
         Ok((lat, precision))
     }
 
-    pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, AprsError> {
+    pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, DecodeError> {
         let value = 90.0
-            - (base91::decode_ascii(b).ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))?
+            - (base91::decode_ascii(b)
+                .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?
                 / 380926.0);
 
-        Self::new(value).ok_or_else(|| AprsError::InvalidLatitude(b.to_owned()))
+        Self::new(value).ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))
     }
 
     pub(crate) fn encode_compressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
@@ -148,15 +149,15 @@ impl Longitude {
     }
 
     /// Precision is needed so we know how many digits to ignore
-    pub(crate) fn parse_uncompressed(b: &[u8], precision: Precision) -> Result<Self, AprsError> {
+    pub(crate) fn parse_uncompressed(b: &[u8], precision: Precision) -> Result<Self, DecodeError> {
         if b.len() != 9 || b[5] != b'.' {
-            return Err(AprsError::InvalidLongitude(b.to_owned()));
+            return Err(DecodeError::InvalidLongitude(b.to_owned()));
         }
 
         let east = match b[8] {
             b'E' => true,
             b'W' => false,
-            _ => return Err(AprsError::InvalidLongitude(b.to_owned())),
+            _ => return Err(DecodeError::InvalidLongitude(b.to_owned())),
         };
 
         let mut digit_buffer = [0; 7];
@@ -169,26 +170,26 @@ impl Longitude {
         }
 
         let deg = parse_bytes::<u32>(&digit_buffer[0..3])
-            .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))? as f64;
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))? as f64;
         let min = parse_bytes::<u32>(&digit_buffer[3..5])
-            .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))? as f64;
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))? as f64;
         let min_frac = parse_bytes::<u32>(&digit_buffer[5..7])
-            .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))?
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))?
             as f64;
 
         let value = deg + min / 60. + min_frac / 6_000.;
         let value = if east { value } else { -value };
 
-        Self::new(value).ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))
+        Self::new(value).ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))
     }
 
-    pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, AprsError> {
+    pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, DecodeError> {
         let value = (base91::decode_ascii(b)
-            .ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))?
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))?
             / 190463.0)
             - 180.0;
 
-        Self::new(value).ok_or_else(|| AprsError::InvalidLongitude(b.to_owned()))
+        Self::new(value).ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))
     }
 
     pub(crate) fn encode_compressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
@@ -294,31 +295,31 @@ mod tests {
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"    .  S"[..]),
-            Err(AprsError::InvalidLatitude(b"    .  S".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"    .  S".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"49 3.50W"[..]),
-            Err(AprsError::InvalidLatitude(b"49 3.50W".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"49 3.50W".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"490 .50W"[..]),
-            Err(AprsError::InvalidLatitude(b"490 .50W".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"490 .50W".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"49  . 0W"[..]),
-            Err(AprsError::InvalidLatitude(b"49  . 0W".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"49  . 0W".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"4903.50W"[..]),
-            Err(AprsError::InvalidLatitude(b"4903.50W".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"4903.50W".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"4903.50E"[..]),
-            Err(AprsError::InvalidLatitude(b"4903.50E".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"4903.50E".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"9903.50N"[..]),
-            Err(AprsError::InvalidLatitude(b"9903.50N".to_vec()))
+            Err(DecodeError::InvalidLatitude(b"9903.50N".to_vec()))
         );
         assert_eq!(
             Latitude::parse_uncompressed(&b"0000.00N"[..]).unwrap(),
@@ -342,15 +343,15 @@ mod tests {
         );
         assert_eq!(
             Longitude::parse_uncompressed(&b"04903.50N"[..], Precision::default()),
-            Err(AprsError::InvalidLongitude(b"04903.50N".to_vec()))
+            Err(DecodeError::InvalidLongitude(b"04903.50N".to_vec()))
         );
         assert_eq!(
             Longitude::parse_uncompressed(&b"04903.50S"[..], Precision::default()),
-            Err(AprsError::InvalidLongitude(b"04903.50S".to_vec()))
+            Err(DecodeError::InvalidLongitude(b"04903.50S".to_vec()))
         );
         assert_eq!(
             Longitude::parse_uncompressed(&b"18903.50E"[..], Precision::default()),
-            Err(AprsError::InvalidLongitude(b"18903.50E".to_vec()))
+            Err(DecodeError::InvalidLongitude(b"18903.50E".to_vec()))
         );
         assert_relative_eq!(
             *Longitude::parse_uncompressed(&b"00000.00E"[..], Precision::default()).unwrap(),

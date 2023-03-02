@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::io::Write;
 
-use AprsError;
+use DecodeError;
 use EncodeError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,20 +38,20 @@ impl AprsMessage {
 }
 
 impl TryFrom<&[u8]> for AprsMessage {
-    type Error = AprsError;
+    type Error = DecodeError;
 
-    fn try_from(b: &[u8]) -> Result<Self, AprsError> {
+    fn try_from(b: &[u8]) -> Result<Self, DecodeError> {
         let mut splitter = b.splitn(2, |x| *x == b':');
 
         let mut addressee = match splitter.next() {
             Some(x) => x.to_vec(),
             None => {
-                return Err(AprsError::InvalidMessageDestination(vec![]));
+                return Err(DecodeError::InvalidMessageDestination(vec![]));
             }
         };
 
         if addressee.len() != 9 {
-            return Err(AprsError::InvalidMessageDestination(addressee.to_owned()));
+            return Err(DecodeError::InvalidMessageDestination(addressee.to_owned()));
         }
 
         trim_spaces_end(&mut addressee);
@@ -87,7 +87,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(AprsError::InvalidMessageDestination(b"DEST  ".to_vec()))
+            Err(DecodeError::InvalidMessageDestination(b"DEST  ".to_vec()))
         );
     }
 
