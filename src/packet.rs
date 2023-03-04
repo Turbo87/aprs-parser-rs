@@ -245,6 +245,10 @@ impl AprsData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mic_e::{Course, Message, Speed};
+    use Latitude;
+    use Longitude;
+    use Precision;
     use QConstruct;
     use Timestamp;
 
@@ -359,7 +363,7 @@ mod tests {
     #[test]
     fn parse_packet_mic_e() {
         let result = AprsPacket::decode_textual(
-            &b"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="[..],
+            &br#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-12:`|9g"H?>/>"4z}="#[..],
         )
         .unwrap();
 
@@ -373,7 +377,18 @@ mod tests {
                     Via::QConstruct(QConstruct::AU),
                     Via::Callsign(Callsign::new_with_ssid("DB0KOE", "12"), false)
                 ],
-                data: AprsData::MicE(todo!())
+                data: AprsData::MicE(AprsMicE {
+                    latitude: Latitude::new(51.041).unwrap(),
+                    longitude: Longitude::new(6.495833333333334).unwrap(),
+                    precision: Precision::HundredthMinute,
+                    message: Message::M1,
+                    speed: Speed::new(64).unwrap(),
+                    course: Course::new(35).unwrap(),
+                    symbol_table: '/',
+                    symbol_code: '>',
+                    comment: br#">"4z}="#.to_vec(),
+                    current: true
+                })
             },
             result
         );

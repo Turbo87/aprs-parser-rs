@@ -59,6 +59,38 @@ impl Message {
             _ => Self::Unknown,
         }
     }
+
+    fn encode(&self) -> (MessageBit, MessageBit, MessageBit) {
+        use self::Message::*;
+        use self::MessageBit::{CustomOne, StandardOne, Zero};
+
+        match self {
+            M0 => (StandardOne, StandardOne, StandardOne),
+            C0 => (CustomOne, CustomOne, CustomOne),
+
+            M1 => (StandardOne, StandardOne, Zero),
+            C1 => (CustomOne, CustomOne, Zero),
+
+            M2 => (StandardOne, Zero, StandardOne),
+            C2 => (CustomOne, Zero, CustomOne),
+
+            M3 => (StandardOne, Zero, Zero),
+            C3 => (CustomOne, Zero, Zero),
+
+            M4 => (Zero, StandardOne, StandardOne),
+            C4 => (Zero, CustomOne, CustomOne),
+
+            M5 => (Zero, StandardOne, Zero),
+            C5 => (Zero, CustomOne, Zero),
+
+            M6 => (Zero, Zero, StandardOne),
+            C6 => (Zero, Zero, CustomOne),
+
+            Message::Emergency => (Zero, Zero, Zero),
+            // any combination of standard and custom ones would work here
+            Message::Unknown => (StandardOne, CustomOne, StandardOne),
+        }
+    }
 }
 
 /// A speed. Valid values range from 0 to 799 knots.
@@ -157,7 +189,47 @@ impl AprsMicE {
     }
 
     pub fn encode_destination(&self) -> Callsign {
-        todo!()
+        let mut encoded_lat = vec![];
+        // safe to do
+        // can only fail from a write error
+        // which is impossible because we're writing to an array
+        self.latitude
+            .encode_uncompressed(&mut encoded_lat, self.precision)
+            .unwrap();
+        assert_eq!(8, encoded_lat.len());
+
+        let lat_dir = if *self.latitude >= 0.0 {
+            LatDir::North
+        } else {
+            LatDir::South
+        };
+
+        let long_dir = if *self.longitude >= 0.0 {
+            LongDir::East
+        } else {
+            LongDir::West
+        };
+
+        let long_abs = self.longitude.abs();
+        let long_offset = if (0.0..=9.0).contains(&long_abs) || long_abs >= 100.0 {
+            LongOffset::Hundred
+        } else {
+            LongOffset::Zero
+        };
+
+        let (a, b, c) = self.message.encode();
+
+        let bytes = vec![
+            encode_bits_012(encoded_lat[0], a),
+            encode_bits_012(encoded_lat[1], b),
+            encode_bits_012(encoded_lat[2], c),
+            encode_bit_3(encoded_lat[3], lat_dir),
+            encode_bit_4(encoded_lat[5], long_offset),
+            encode_bit_5(encoded_lat[6], long_dir),
+        ];
+
+        // Safe to unwrap because we know all bytes are valid ASCII
+        Callsign::new_no_ssid(String::from_utf8(bytes).unwrap())
     }
 }
 
@@ -331,6 +403,50 @@ fn decode_speed_and_course(b: &[u8]) -> Option<(Speed, Course)> {
     Some((speed, course))
 }
 
+// lat_digit must be an ASCII char to allow for spaces
+fn encode_bits_012(lat_digit: u8, message_bit: MessageBit) -> u8 {
+    match (message_bit, lat_digit == b' ') {
+        (MessageBit::Zero, false) => lat_digit,
+        (MessageBit::Zero, true) => b'L',
+
+        (MessageBit::CustomOne, false) => lat_digit + 17,
+        (MessageBit::CustomOne, true) => b'K',
+
+        (MessageBit::StandardOne, false) => lat_digit + 32,
+        (MessageBit::StandardOne, true) => b'Z',
+    }
+}
+
+fn encode_bit_3(lat_digit: u8, lat_dir: LatDir) -> u8 {
+    match (lat_dir, lat_digit == b' ') {
+        (LatDir::North, false) => lat_digit + 32,
+        (LatDir::North, true) => b'Z',
+
+        (LatDir::South, false) => lat_digit,
+        (LatDir::South, true) => b'L',
+    }
+}
+
+fn encode_bit_4(lat_digit: u8, long_offset: LongOffset) -> u8 {
+    match (long_offset, lat_digit == b' ') {
+        (LongOffset::Zero, false) => lat_digit,
+        (LongOffset::Zero, true) => b'L',
+
+        (LongOffset::Hundred, false) => lat_digit + 32,
+        (LongOffset::Hundred, true) => b'Z',
+    }
+}
+
+fn encode_bit_5(lat_digit: u8, long_dir: LongDir) -> u8 {
+    match (long_dir, lat_digit == b' ') {
+        (LongDir::East, false) => lat_digit,
+        (LongDir::East, true) => b'L',
+
+        (LongDir::West, false) => lat_digit + 32,
+        (LongDir::West, true) => b'Z',
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,5 +528,15 @@ mod tests {
             },
             data
         );
+    }
+
+    #[test]
+    fn encode_destination_test() {
+        let information = &br#"(_fn"Oj/Hello world!"#[..];
+        let to = Callsign::new_no_ssid("S5PPW4");
+
+        let data = AprsMicE::decode(information, to.clone(), true).unwrap();
+
+        assert_eq!(to, data.encode_destination());
     }
 }
