@@ -6,6 +6,8 @@ use EncodeError;
 use Latitude;
 use Precision;
 
+use crate::Longitude;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Message {
     M0,
@@ -59,15 +61,95 @@ impl Message {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct AprsMicE {}
+/// A speed. Valid values range from 0 to 799 knots.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Speed(u32);
+
+impl Speed {
+    /// Creates a new `Speed` from knots.
+    pub fn new(knots: u32) -> Option<Self> {
+        if knots > 799 {
+            return None;
+        }
+
+        Some(Self(knots))
+    }
+
+    pub fn knots(&self) -> u32 {
+        self.0
+    }
+}
+
+/// A course. Valid values range from 0 to 360 degrees.
+/// 0 degrees represents an unknown course.
+/// 360 degrees represents north.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Course(u32);
+
+impl Course {
+    pub const UNKNOWN: Self = Self(0);
+
+    /// Creates a new `Course` from degrees.
+    pub fn new(degrees: u32) -> Option<Self> {
+        if degrees > 360 {
+            return None;
+        }
+
+        Some(Self(degrees))
+    }
+
+    pub fn degrees(&self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct AprsMicE {
+    pub latitude: Latitude,
+    pub longitude: Longitude,
+    pub precision: Precision,
+
+    pub message: Message,
+    pub speed: Speed,
+    pub course: Course,
+    pub symbol_table: char,
+    pub symbol_code: char,
+    pub comment: Vec<u8>,
+
+    pub current: bool,
+}
 
 impl AprsMicE {
-    pub fn decode(b: &[u8], to: Callsign, new: bool) -> Result<Self, DecodeError> {
-        let dest = decode_callsign(to);
-        dbg!(dest);
+    pub fn decode(b: &[u8], to: Callsign, current: bool) -> Result<Self, DecodeError> {
+        let (latitude, precision, message, long_offset, long_dir) =
+            decode_callsign(&to).ok_or(DecodeError::InvalidMicEDestination(to))?;
 
-        Ok(Self {})
+        let info = b
+            .get(0..8)
+            .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
+        let comment = b.get(8..).unwrap_or(&[]).to_vec();
+
+        let longitude = decode_longitude(&info[0..3], long_offset, long_dir)
+            .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
+        let (speed, course) = decode_speed_and_course(&info[3..6])
+            .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
+        let symbol_code = char::from(info[6]);
+        let symbol_table = char::from(info[7]);
+
+        Ok(Self {
+            latitude,
+            longitude,
+            precision,
+
+            message,
+            speed,
+            course,
+            symbol_table,
+            symbol_code,
+            comment,
+
+            current,
+        })
     }
 
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
@@ -118,7 +200,7 @@ impl LatDir {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum LongOffset {
     Zero,
     Hundred,
@@ -134,7 +216,7 @@ impl LongOffset {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum LongDir {
     East,
     West,
@@ -161,7 +243,7 @@ fn decode_latitude_digit(c: u8) -> Option<u8> {
     }
 }
 
-fn decode_callsign(c: Callsign) -> Option<(Latitude, Precision, Message, LongOffset, LongDir)> {
+fn decode_callsign(c: &Callsign) -> Option<(Latitude, Precision, Message, LongOffset, LongDir)> {
     let data = c.call().as_bytes();
     if data.len() != 6 {
         return None;
@@ -191,4 +273,144 @@ fn decode_callsign(c: Callsign) -> Option<(Latitude, Precision, Message, LongOff
     let long_dir = LongDir::decode(data[5])?;
 
     Some((lat, precision, msg, long_offset, long_dir))
+}
+
+fn decode_longitude(b: &[u8], offset: LongOffset, dir: LongDir) -> Option<Longitude> {
+    if b.len() != 3 {
+        return None;
+    }
+
+    let mut d = b[0] - 28;
+
+    if offset == LongOffset::Hundred {
+        d += 100;
+    }
+
+    if d >= 180 && d <= 189 {
+        d -= 80;
+    } else if d >= 190 && d <= 199 {
+        d -= 190;
+    }
+
+    let mut m = b[1] - 28;
+
+    if m >= 60 {
+        m -= 60;
+    }
+
+    let h = b[2] - 28;
+
+    Longitude::from_dmh(d.into(), m.into(), h.into(), dir == LongDir::East)
+}
+
+fn decode_speed_and_course(b: &[u8]) -> Option<(Speed, Course)> {
+    let sp = u32::from(b[0] - 28);
+
+    let tens_knots = sp * 10;
+
+    let dc = u32::from(b[1] - 28);
+
+    let units_knots = dc / 10;
+    let hundreds_course = (dc % 10) * 100;
+
+    let units_course = u32::from(b[2] - 28);
+
+    let mut speed_knots = tens_knots + units_knots;
+    if speed_knots >= 800 {
+        speed_knots -= 800;
+    }
+
+    let mut course_degrees = hundreds_course + units_course;
+    if course_degrees >= 400 {
+        course_degrees -= 400;
+    }
+
+    let speed = Speed::new(speed_knots)?;
+    let course = Course::new(course_degrees)?;
+
+    Some((speed, course))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn course_from_u32() {
+        let course = Course::new(123).unwrap();
+        assert_eq!(123, course.degrees());
+
+        let course = Course::new(360).unwrap();
+        assert_eq!(360, course.degrees());
+    }
+
+    #[test]
+    fn course_from_u32_smallest() {
+        let course = Course::new(0).unwrap();
+        assert_eq!(0, course.degrees());
+    }
+
+    #[test]
+    fn course_from_u32_too_big() {
+        assert_eq!(None, Course::new(361));
+    }
+
+    #[test]
+    fn speed_from_u32() {
+        let speed = Speed::new(545).unwrap();
+        assert_eq!(545, speed.knots());
+
+        let speed = Speed::new(799).unwrap();
+        assert_eq!(799, speed.knots());
+    }
+
+    #[test]
+    fn speed_from_u32_smallest() {
+        let speed = Speed::new(0).unwrap();
+        assert_eq!(0, speed.knots());
+    }
+
+    #[test]
+    fn speed_from_u32_too_big() {
+        assert_eq!(None, Speed::new(800));
+        assert_eq!(None, Speed::new(801));
+        assert_eq!(None, Speed::new(5237));
+    }
+
+    #[test]
+    fn decode_dest_test() {
+        let (latitude, precision, message, offset, dir) =
+            decode_callsign(&Callsign::new_no_ssid("S32U6T")).unwrap();
+
+        assert_eq!(Latitude::new(33.42733333333333).unwrap(), latitude);
+        assert_eq!(Precision::HundredthMinute, precision);
+        assert_eq!(Message::M3, message);
+        assert_eq!(LongOffset::Zero, offset);
+        assert_eq!(LongDir::West, dir);
+    }
+
+    #[test]
+    fn decode_test() {
+        // example from the APRS spec doc
+        let information = &br#"(_fn"Oj/Hello world!"#[..];
+        let to = Callsign::new_no_ssid("PPPPPP");
+
+        let data = AprsMicE::decode(information, to, true).unwrap();
+
+        assert_eq!(
+            AprsMicE {
+                latitude: Latitude::new(0.0).unwrap(),
+                longitude: Longitude::new(-112.12899999999999).unwrap(),
+                precision: Precision::HundredthMinute,
+                message: Message::M0,
+                speed: Speed::new(20).unwrap(),
+                course: Course::new(251).unwrap(),
+                symbol_table: '/',
+                symbol_code: 'j',
+                comment: b"Hello world!".to_vec(),
+                current: true
+            },
+            data
+        );
+    }
 }

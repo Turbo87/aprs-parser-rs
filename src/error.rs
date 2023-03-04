@@ -24,11 +24,15 @@ pub enum DecodeError {
     InvalidMessageId(Vec<u8>),
     #[error("Invalid Compressed cs: {0:?}")]
     InvalidCs([u8; 2]),
+    #[error("Invalid Mic-E destination address: {0:}")]
+    InvalidMicEDestination(Callsign),
+    #[error("Invalid Mic-E information field: {0:?}")]
+    InvalidMicEInformation(Vec<u8>),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum EncodeError {
-    #[error("Callsign can't be encoded: {0:?}")]
+    #[error("Callsign can't be encoded: {0:}")]
     InvalidCallsign(Callsign),
     #[error("Invalid Latitude: {0}")]
     InvalidLatitude(f64),

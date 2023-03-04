@@ -373,7 +373,7 @@ mod tests {
                     Via::QConstruct(QConstruct::AU),
                     Via::Callsign(Callsign::new_with_ssid("DB0KOE", "12"), false)
                 ],
-                data: AprsData::MicE(AprsMicE {})
+                data: AprsData::MicE(todo!())
             },
             result
         );
