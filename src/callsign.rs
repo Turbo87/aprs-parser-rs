@@ -9,7 +9,7 @@ pub enum CallsignField {
     Via(bool),
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, Hash)]
 pub struct Callsign {
     call: String,
     ssid: Option<String>,
@@ -44,6 +44,14 @@ impl Callsign {
         let call = call.into();
         let ssid = Some(ssid.into());
         Callsign { call, ssid }
+    }
+
+    pub fn call(&self) -> &str {
+        &self.call
+    }
+
+    pub fn ssid(&self) -> Option<&str> {
+        self.ssid.as_deref()
     }
 
     pub fn encode_textual<W: Write>(&self, heard: bool, w: &mut W) -> io::Result<()> {

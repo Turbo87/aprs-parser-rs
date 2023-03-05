@@ -20,13 +20,13 @@
 //!         Ok(
 //!             AprsPacket {
 //!                 from: Callsign::new_no_ssid("ICA3D2"),
-//!                 to: Callsign::new_no_ssid("APRS"),
 //!                 via: vec![
 //!                     Via::QConstruct(QConstruct::AS),
 //!                     Via::Callsign(Callsign::new_no_ssid("dl4mea"), false),
 //!                 ],
 //!                 data: AprsData::Position(
 //!                     AprsPosition {
+//!                         to: Callsign::new_no_ssid("APRS"),
 //!                         timestamp: Some(
 //!                             Timestamp::HHMMSS(
 //!                                 7,
@@ -67,6 +67,7 @@ mod compression_type;
 mod error;
 mod lonlat;
 mod message;
+pub mod mic_e;
 mod packet;
 mod position;
 mod status;
@@ -79,6 +80,7 @@ pub use compression_type::AprsCompressionType;
 pub use error::{DecodeError, EncodeError};
 pub use lonlat::{Latitude, Longitude};
 pub use message::AprsMessage;
+pub use mic_e::AprsMicE;
 pub use packet::{AprsData, AprsPacket};
 pub use position::{AprsCst, AprsPosition, Precision};
 pub use status::AprsStatus;

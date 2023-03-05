@@ -29,6 +29,33 @@ impl Latitude {
         }
     }
 
+    /// Creates a new `Latitude` from degrees, minutes, and hundredths of a minute,
+    /// as well as direction
+    pub fn from_dmh(deg: u32, min: u32, hundredths: u32, north: bool) -> Option<Self> {
+        let value = f64::from(deg) + f64::from(min) / 60. + f64::from(hundredths) / 6_000.;
+        let value = if north { value } else { -value };
+
+        Self::new(value)
+    }
+
+    /// Returns the `Latitude`'s degrees, minutes, hundredths of a minute, and direction.
+    /// `true` is north, `false` is south.
+    pub fn dmh(&self) -> (u32, u32, u32, bool) {
+        let lat = self.0;
+
+        let (dir, lat) = if lat >= 0.0 {
+            (true, lat)
+        } else {
+            (false, -lat)
+        };
+
+        let deg = lat as u32;
+        let min = ((lat - (deg as f64)) * 60.0) as u32;
+        let hundredths = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+
+        (deg, min, hundredths, dir)
+    }
+
     /// The value of the latitude.
     pub fn value(&self) -> f64 {
         self.0
@@ -62,10 +89,8 @@ impl Latitude {
         let precision = Precision::from_num_digits(total_spaces)
             .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
 
-        let value = deg as f64 + min as f64 / 60. + min_frac as f64 / 6_000.;
-        let value = if north { value } else { -value };
-
-        let lat = Self::new(value).ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
+        let lat = Self::from_dmh(deg, min, min_frac, north)
+            .ok_or_else(|| DecodeError::InvalidLatitude(b.to_owned()))?;
 
         Ok((lat, precision))
     }
@@ -89,13 +114,8 @@ impl Latitude {
         buf: &mut W,
         precision: Precision,
     ) -> Result<(), EncodeError> {
-        let lat = self.0;
-
-        let (dir, lat) = if lat >= 0.0 { ('N', lat) } else { ('S', -lat) };
-
-        let deg = lat as u32;
-        let min = ((lat - (deg as f64)) * 60.0) as u32;
-        let min_frac = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+        let (deg, min, min_frac, is_north) = self.dmh();
+        let dir = if is_north { 'N' } else { 'S' };
 
         // zero out fields as required for precision
         // Ideally we would be doing some clever rounding here
@@ -143,6 +163,33 @@ impl Longitude {
         }
     }
 
+    /// Creates a new `Longitude` from degrees, minutes, and hundredths of a minute,
+    /// as well as direction
+    pub fn from_dmh(deg: u32, min: u32, hundredths: u32, east: bool) -> Option<Self> {
+        let value = f64::from(deg) + f64::from(min) / 60. + f64::from(hundredths) / 6_000.;
+        let value = if east { value } else { -value };
+
+        Self::new(value)
+    }
+
+    /// Returns the `Longitude`'s degrees, minutes, hundredths of a minute, and direction.
+    /// `true` is east, `false` is west.
+    pub fn dmh(&self) -> (u32, u32, u32, bool) {
+        let lon = self.0;
+
+        let (dir, lon) = if lon >= 0.0 {
+            (true, lon)
+        } else {
+            (false, -lon)
+        };
+
+        let deg = lon as u32;
+        let min = ((lon - (deg as f64)) * 60.0) as u32;
+        let hundredths = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+
+        (deg, min, hundredths, dir)
+    }
+
     /// The value of the longitude.
     pub fn value(&self) -> f64 {
         self.0
@@ -170,17 +217,14 @@ impl Longitude {
         }
 
         let deg = parse_bytes::<u32>(&digit_buffer[0..3])
-            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))? as f64;
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))?;
         let min = parse_bytes::<u32>(&digit_buffer[3..5])
-            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))? as f64;
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))?;
         let min_frac = parse_bytes::<u32>(&digit_buffer[5..7])
-            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))?
-            as f64;
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))?;
 
-        let value = deg + min / 60. + min_frac / 6_000.;
-        let value = if east { value } else { -value };
-
-        Self::new(value).ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))
+        Self::from_dmh(deg, min, min_frac, east)
+            .ok_or_else(|| DecodeError::InvalidLongitude(b.to_owned()))
     }
 
     pub(crate) fn parse_compressed(b: &[u8]) -> Result<Self, DecodeError> {
@@ -198,13 +242,8 @@ impl Longitude {
     }
 
     pub(crate) fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        let lon = self.0;
-
-        let (dir, lon) = if lon >= 0.0 { ('E', lon) } else { ('W', -lon) };
-
-        let deg = lon as u32;
-        let min = ((lon - (deg as f64)) * 60.0) as u32;
-        let min_frac = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+        let (deg, min, min_frac, is_east) = self.dmh();
+        let dir = if is_east { 'E' } else { 'W' };
 
         write!(buf, "{:03}{:02}.{:02}{}", deg, min, min_frac, dir)?;
         Ok(())
