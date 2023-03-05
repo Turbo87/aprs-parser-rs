@@ -384,8 +384,8 @@ mod tests {
                     message: Message::M1,
                     speed: Speed::new(64).unwrap(),
                     course: Course::new(35).unwrap(),
-                    symbol_table: '/',
-                    symbol_code: '>',
+                    symbol_table: b'/',
+                    symbol_code: b'>',
                     comment: br#">"4z}="#.to_vec(),
                     current: true
                 })
@@ -406,7 +406,7 @@ mod tests {
             r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
-            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q<0x1c>l|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            "VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q\x1cl|ok/'\"4<}Nick - Monitoring IRG|!\"&7'M|!wTD!|3",
             r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
         ];
 
@@ -414,7 +414,7 @@ mod tests {
             let mut buf = vec![];
             let packet = AprsPacket::decode_textual(v.as_bytes()).unwrap();
             packet.encode_textual(&mut buf).unwrap();
-            assert_eq!(buf, v.as_bytes());
+            assert_eq!(buf, v.as_bytes(), "\n{}\n{}", buf.escape_ascii(), v);
         }
     }
 
@@ -430,7 +430,7 @@ mod tests {
             r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
-            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q<0x1c>l|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            "VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q\x1cl|ok/'\"4<}Nick - Monitoring IRG|!\"&7'M|!wTD!|3",
             r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
             // 0 to 8 via callsigns
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
@@ -456,8 +456,8 @@ mod tests {
             r"IC17F2>APRS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,DL4MEA:>184050hAlso with HMS format...",
-            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q<0x1c>l|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
-            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
+            "VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,VE9QLE-10:`]Q\x1cl|ok/'\"4<}Nick - Monitoring IRG|!\"&7'M|!wTD!|3",
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
             // 0 to 8 via callsigns
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
             r"ICA3F2>APRS:>184050hAlso with HMS format...",

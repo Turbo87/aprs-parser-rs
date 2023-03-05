@@ -38,6 +38,24 @@ impl Latitude {
         Self::new(value)
     }
 
+    /// Returns the `Latitude`'s degrees, minutes, hundredths of a minute, and direction.
+    /// `true` is north, `false` is south.
+    pub fn dmh(&self) -> (u32, u32, u32, bool) {
+        let lat = self.0;
+
+        let (dir, lat) = if lat >= 0.0 {
+            (true, lat)
+        } else {
+            (false, -lat)
+        };
+
+        let deg = lat as u32;
+        let min = ((lat - (deg as f64)) * 60.0) as u32;
+        let hundredths = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+
+        (deg, min, hundredths, dir)
+    }
+
     /// The value of the latitude.
     pub fn value(&self) -> f64 {
         self.0
@@ -96,13 +114,8 @@ impl Latitude {
         buf: &mut W,
         precision: Precision,
     ) -> Result<(), EncodeError> {
-        let lat = self.0;
-
-        let (dir, lat) = if lat >= 0.0 { ('N', lat) } else { ('S', -lat) };
-
-        let deg = lat as u32;
-        let min = ((lat - (deg as f64)) * 60.0) as u32;
-        let min_frac = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+        let (deg, min, min_frac, is_north) = self.dmh();
+        let dir = if is_north { 'N' } else { 'S' };
 
         // zero out fields as required for precision
         // Ideally we would be doing some clever rounding here
@@ -159,6 +172,24 @@ impl Longitude {
         Self::new(value)
     }
 
+    /// Returns the `Longitude`'s degrees, minutes, hundredths of a minute, and direction.
+    /// `true` is east, `false` is west.
+    pub fn dmh(&self) -> (u32, u32, u32, bool) {
+        let lon = self.0;
+
+        let (dir, lon) = if lon >= 0.0 {
+            (true, lon)
+        } else {
+            (false, -lon)
+        };
+
+        let deg = lon as u32;
+        let min = ((lon - (deg as f64)) * 60.0) as u32;
+        let hundredths = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+
+        (deg, min, hundredths, dir)
+    }
+
     /// The value of the longitude.
     pub fn value(&self) -> f64 {
         self.0
@@ -211,13 +242,8 @@ impl Longitude {
     }
 
     pub(crate) fn encode_uncompressed<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        let lon = self.0;
-
-        let (dir, lon) = if lon >= 0.0 { ('E', lon) } else { ('W', -lon) };
-
-        let deg = lon as u32;
-        let min = ((lon - (deg as f64)) * 60.0) as u32;
-        let min_frac = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+        let (deg, min, min_frac, is_east) = self.dmh();
+        let dir = if is_east { 'E' } else { 'W' };
 
         write!(buf, "{:03}{:02}.{:02}{}", deg, min, min_frac, dir)?;
         Ok(())

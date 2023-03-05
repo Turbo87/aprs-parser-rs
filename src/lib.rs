@@ -20,13 +20,13 @@
 //!         Ok(
 //!             AprsPacket {
 //!                 from: Callsign::new_no_ssid("ICA3D2"),
-//!                 to: Callsign::new_no_ssid("APRS"),
 //!                 via: vec![
 //!                     Via::QConstruct(QConstruct::AS),
 //!                     Via::Callsign(Callsign::new_no_ssid("dl4mea"), false),
 //!                 ],
 //!                 data: AprsData::Position(
 //!                     AprsPosition {
+//!                         to: Callsign::new_no_ssid("APRS"),
 //!                         timestamp: Some(
 //!                             Timestamp::HHMMSS(
 //!                                 7,

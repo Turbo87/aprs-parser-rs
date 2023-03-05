@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::io::Write;
 
 use Callsign;
@@ -144,8 +145,8 @@ pub struct AprsMicE {
     pub message: Message,
     pub speed: Speed,
     pub course: Course,
-    pub symbol_table: char,
-    pub symbol_code: char,
+    pub symbol_table: u8,
+    pub symbol_code: u8,
     pub comment: Vec<u8>,
 
     pub current: bool,
@@ -165,8 +166,8 @@ impl AprsMicE {
             .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
         let (speed, course) = decode_speed_and_course(&info[3..6])
             .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
-        let symbol_code = char::from(info[6]);
-        let symbol_table = char::from(info[7]);
+        let symbol_code = info[6];
+        let symbol_table = info[7];
 
         Ok(Self {
             latitude,
@@ -185,7 +186,19 @@ impl AprsMicE {
     }
 
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        todo!()
+        if self.current {
+            buf.write_all(&[b'`'])?;
+        } else {
+            buf.write_all(&[b'\''])?;
+        }
+
+        self.encode_longitude(buf)?;
+        self.encode_speed_and_course(buf)?;
+
+        buf.write_all(&[self.symbol_code, self.symbol_table])?;
+        buf.write_all(&self.comment)?;
+
+        Ok(())
     }
 
     pub fn encode_destination(&self) -> Callsign {
@@ -204,14 +217,15 @@ impl AprsMicE {
             LatDir::South
         };
 
-        let long_dir = if *self.longitude >= 0.0 {
+        let (long_deg, _, _, is_east) = self.longitude.dmh();
+
+        let long_dir = if is_east {
             LongDir::East
         } else {
             LongDir::West
         };
 
-        let long_abs = self.longitude.abs();
-        let long_offset = if (0.0..=9.0).contains(&long_abs) || long_abs >= 100.0 {
+        let long_offset = if (0..=9).contains(&long_deg) || long_deg >= 100 {
             LongOffset::Hundred
         } else {
             LongOffset::Zero
@@ -230,6 +244,48 @@ impl AprsMicE {
 
         // Safe to unwrap because we know all bytes are valid ASCII
         Callsign::new_no_ssid(String::from_utf8(bytes).unwrap())
+    }
+
+    fn encode_longitude<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
+        let (d, m, h, _) = self.longitude.dmh();
+        let d: u8 = d.try_into().unwrap();
+        let m: u8 = m.try_into().unwrap();
+        let h: u8 = h.try_into().unwrap();
+
+        // safe to unwrap - valid latitudes must be <= 180 degrees
+        let d: u8 = match d {
+            0..=9 => d + 90,
+            10..=99 => d,
+            _ => d - 20,
+        };
+
+        let m = match m {
+            0..=9 => m + 60,
+            _ => m,
+        };
+
+        w.write_all(&[d + 28, m + 28, h + 28])?;
+
+        Ok(())
+    }
+
+    fn encode_speed_and_course<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
+        let tens_knots: u8 = (self.speed.knots() / 10).try_into().unwrap();
+        let units_knots = self.speed.knots() % 10;
+
+        let hundreds_course = self.course.degrees() / 100;
+        let units_course = self.course.degrees() % 100;
+
+        let sp: u8 = match tens_knots {
+            0..=19 => tens_knots + 80,
+            _ => tens_knots,
+        };
+        let dc: u8 = (units_knots * 10 + hundreds_course + 4).try_into().unwrap();
+        let se: u8 = (units_course).try_into().unwrap();
+
+        w.write_all(&[sp + 28, dc + 28, se + 28])?;
+
+        Ok(())
     }
 }
 
@@ -521,8 +577,8 @@ mod tests {
                 message: Message::M0,
                 speed: Speed::new(20).unwrap(),
                 course: Course::new(251).unwrap(),
-                symbol_table: '/',
-                symbol_code: 'j',
+                symbol_table: b'/',
+                symbol_code: b'j',
                 comment: b"Hello world!".to_vec(),
                 current: true
             },
