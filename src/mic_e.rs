@@ -248,15 +248,17 @@ impl AprsMicE {
 
     fn encode_longitude<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
         let (d, m, h, _) = self.longitude.dmh();
+
+        // safe to unwrap - all values must be less than 255
         let d: u8 = d.try_into().unwrap();
         let m: u8 = m.try_into().unwrap();
         let h: u8 = h.try_into().unwrap();
 
-        // safe to unwrap - valid latitudes must be <= 180 degrees
-        let d: u8 = match d {
+        let d = match d {
             0..=9 => d + 90,
             10..=99 => d,
-            _ => d - 20,
+            100..=109 => d - 20,
+            _ => d - 100,
         };
 
         let m = match m {
@@ -408,10 +410,10 @@ fn decode_longitude(b: &[u8], offset: LongOffset, dir: LongDir) -> Option<Longit
         return None;
     }
 
-    let mut d = b[0] - 28;
+    let mut d = b[0].checked_sub(28)?;
 
     if offset == LongOffset::Hundred {
-        d += 100;
+        d = d.checked_add(100)?;
     }
 
     if d >= 180 && d <= 189 {
@@ -420,28 +422,28 @@ fn decode_longitude(b: &[u8], offset: LongOffset, dir: LongDir) -> Option<Longit
         d -= 190;
     }
 
-    let mut m = b[1] - 28;
+    let mut m = b[1].checked_sub(28)?;
 
     if m >= 60 {
         m -= 60;
     }
 
-    let h = b[2] - 28;
+    let h = b[2].checked_sub(28)?;
 
     Longitude::from_dmh(d.into(), m.into(), h.into(), dir == LongDir::East)
 }
 
 fn decode_speed_and_course(b: &[u8]) -> Option<(Speed, Course)> {
-    let sp = u32::from(b[0] - 28);
+    let sp = u32::from(b[0].checked_sub(28)?);
 
     let tens_knots = sp * 10;
 
-    let dc = u32::from(b[1] - 28);
+    let dc = u32::from(b[1].checked_sub(28)?);
 
     let units_knots = dc / 10;
     let hundreds_course = (dc % 10) * 100;
 
-    let units_course = u32::from(b[2] - 28);
+    let units_course = u32::from(b[2].checked_sub(28)?);
 
     let mut speed_knots = tens_knots + units_knots;
     if speed_knots >= 800 {
@@ -567,7 +569,7 @@ mod tests {
         let information = &br#"(_fn"Oj/Hello world!"#[..];
         let to = Callsign::new_no_ssid("PPPPPP");
 
-        let data = AprsMicE::decode(information, to, true).unwrap();
+        let data = AprsMicE::decode(information, to.clone(), true).unwrap();
 
         assert_eq!(
             AprsMicE {
@@ -584,6 +586,13 @@ mod tests {
             },
             data
         );
+
+        let mut re_encoded = vec![];
+        data.encode(&mut re_encoded).unwrap();
+
+        // skip first byte as it's the backtick
+        assert_eq!(information, &re_encoded[1..]);
+        assert_eq!(to, data.encode_destination());
     }
 
     #[test]

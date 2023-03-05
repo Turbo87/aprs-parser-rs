@@ -30,16 +30,7 @@ fn main() {
     // Ok(
     //     AprsPacket {
     //         from: Callsign {
-    //             call: "IC17F2"
-    //             ssid: None,
-    //         },
-    //         to: Callsign {
-    //             call: [
-    //                 65,
-    //                 80,
-    //                 82,
-    //                 83,
-    //             ],
+    //             call: "IC17F2",
     //             ssid: None,
     //         },
     //         via: [
@@ -48,7 +39,7 @@ fn main() {
     //             ),
     //             Callsign(
     //                 Callsign {
-    //                     call: "dl4mea"
+    //                     call: "dl4mea",
     //                     ssid: None,
     //                 },
     //                 false,
@@ -56,6 +47,10 @@ fn main() {
     //         ],
     //         data: Position(
     //             AprsPosition {
+    //                 to: Callsign {
+    //                     call: "APRS",
+    //                     ssid: None,
+    //                 },
     //                 timestamp: Some(
     //                     HHMMSS(
     //                         7,
