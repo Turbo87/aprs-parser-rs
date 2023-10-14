@@ -244,10 +244,9 @@ impl AprsData {
 
 #[cfg(test)]
 mod tests {
-    use crate::AprsCst;
-
     use super::*;
     use mic_e::{Course, Message, Speed};
+    use AprsCst;
     use Latitude;
     use Longitude;
     use Precision;
