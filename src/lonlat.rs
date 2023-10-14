@@ -49,9 +49,20 @@ impl Latitude {
             (false, -lat)
         };
 
-        let deg = lat as u32;
-        let min = ((lat - (deg as f64)) * 60.0) as u32;
-        let hundredths = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+        let mut deg = lat as u32;
+        let mut min = ((lat - (deg as f64)) * 60.0) as u32;
+        let mut hundredths = ((lat - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+
+        if hundredths == 100 {
+            // overflow from the rounding. need to propagate it up
+            hundredths = 0;
+            min += 1;
+        }
+
+        if min == 60 {
+            min = 0;
+            deg += 1;
+        }
 
         (deg, min, hundredths, dir)
     }
@@ -183,9 +194,20 @@ impl Longitude {
             (false, -lon)
         };
 
-        let deg = lon as u32;
-        let min = ((lon - (deg as f64)) * 60.0) as u32;
-        let hundredths = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+        let mut deg = lon as u32;
+        let mut min = ((lon - (deg as f64)) * 60.0) as u32;
+        let mut hundredths = ((lon - (deg as f64) - (min as f64 / 60.0)) * 6000.0).round() as u32;
+
+        if hundredths == 100 {
+            // overflow from the rounding. need to propagate it up
+            hundredths = 0;
+            min += 1;
+        }
+
+        if min == 60 {
+            min = 0;
+            deg += 1;
+        }
 
         (deg, min, hundredths, dir)
     }
@@ -439,6 +461,30 @@ mod tests {
             .encode_uncompressed(&mut buf, Precision::OneMinute)
             .unwrap();
         assert_eq!(buf, &b"4903.  S"[..]);
+    }
+
+    #[test]
+    fn test_dmh_lat() {
+        let lat = Latitude::new(11.99999999).unwrap();
+        assert_eq!((12, 0, 0, true), lat.dmh());
+
+        let lat = Latitude::new(-11.99999999).unwrap();
+        assert_eq!((12, 0, 0, false), lat.dmh());
+
+        let lat = Latitude::new(89.9999999).unwrap();
+        assert_eq!((90, 0, 0, true), lat.dmh());
+    }
+
+    #[test]
+    fn test_dmh_lon() {
+        let lon = Longitude::new(33.9999999999).unwrap();
+        assert_eq!((34, 0, 0, true), lon.dmh());
+
+        let lon = Longitude::new(-33.9999999999).unwrap();
+        assert_eq!((34, 0, 0, false), lon.dmh());
+
+        let lon = Longitude::new(179.9999999).unwrap();
+        assert_eq!((180, 0, 0, true), lon.dmh());
     }
 
     #[test]

@@ -244,6 +244,8 @@ impl AprsData {
 
 #[cfg(test)]
 mod tests {
+    use crate::AprsCst;
+
     use super::*;
     use mic_e::{Course, Message, Speed};
     use Latitude;
@@ -391,6 +393,33 @@ mod tests {
                 })
             },
             result
+        );
+    }
+
+    #[test]
+    fn encode_edge_case() {
+        let packet = AprsPacket {
+            from: Callsign::new_no_ssid("D9KS3"),
+            via: vec![],
+            data: AprsData::Position(AprsPosition {
+                to: Callsign::new_no_ssid("NOBODY"),
+                timestamp: None,
+                messaging_supported: true,
+                latitude: Latitude::new(33.999999999999).unwrap(),
+                longitude: Longitude::new(33.999999999999).unwrap(),
+                precision: Precision::HundredthMinute,
+                symbol_table: '/',
+                symbol_code: 'c',
+                comment: b"Hello world".to_vec(),
+                cst: AprsCst::Uncompressed,
+            }),
+        };
+
+        let mut buf = vec![];
+        packet.encode_textual(&mut buf).unwrap();
+        assert_eq!(
+            "D9KS3>NOBODY:=3400.00N/03400.00EcHello world",
+            String::from_utf8(buf).unwrap()
         );
     }
 
