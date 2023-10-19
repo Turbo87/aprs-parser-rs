@@ -22,7 +22,7 @@ jobs:
           - stable
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.rust }}
       - run: rustup default ${{ matrix.rust }}
       - run: cargo test
@@ -31,7 +31,7 @@ jobs:
     name: cargo fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup default 1.67.1
       - run: rustup component add rustfmt
       - run: cargo fmt -- --check
@@ -40,7 +40,7 @@ jobs:
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup default 1.67.1
       - run: rustup component add clippy
       - run: cargo clippy --all-targets --all-features -- -D warnings
