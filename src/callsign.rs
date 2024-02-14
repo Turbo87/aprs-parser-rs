@@ -42,7 +42,10 @@ impl Callsign {
 
     pub fn new_with_ssid(call: impl Into<String>, ssid: impl Into<String>) -> Callsign {
         let call = call.into();
-        let ssid = Some(ssid.into());
+        let ssid = ssid.into();
+
+        let ssid = if ssid == "0" { None } else { Some(ssid) };
+
         Callsign { call, ssid }
     }
 
@@ -220,6 +223,11 @@ mod tests {
         assert_eq!(
             Callsign::decode_textual(&b"ABCDEF-2"[..]),
             Some((Callsign::new_with_ssid("ABCDEF", "2"), false))
+        );
+
+        assert_eq!(
+            Callsign::decode_textual(&b"ABCDEF-0"[..]),
+            Some((Callsign::new_no_ssid("ABCDEF"), false))
         );
     }
 

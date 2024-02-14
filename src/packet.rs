@@ -423,6 +423,33 @@ mod tests {
     }
 
     #[test]
+    fn encode_with_ssid_0() {
+        let packet = AprsPacket {
+            from: Callsign::new_with_ssid("D9KS3", "0"),
+            via: vec![Via::Callsign(Callsign::new("D9KS7-0").unwrap(), false)],
+            data: AprsData::Position(AprsPosition {
+                to: Callsign::new_with_ssid("NOBODY", "0"),
+                timestamp: None,
+                messaging_supported: true,
+                latitude: Latitude::new(3.95).unwrap(),
+                longitude: Longitude::new(-4.58).unwrap(),
+                precision: Precision::HundredthMinute,
+                symbol_table: '/',
+                symbol_code: 'c',
+                comment: b"Hello world".to_vec(),
+                cst: AprsCst::Uncompressed,
+            }),
+        };
+
+        let mut buf = vec![];
+        packet.encode_textual(&mut buf).unwrap();
+        assert_eq!(
+            "D9KS3>NOBODY,D9KS7:=0357.00N/00434.80WcHello world",
+            String::from_utf8(buf).unwrap()
+        );
+    }
+
+    #[test]
     fn e2e_serialize_deserialize() {
         let valids = vec![
             r"3D17F2>APRS,qAS,DL4MEA:/074849h4821.61N\01224.49E^322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1",
