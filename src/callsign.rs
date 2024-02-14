@@ -44,7 +44,7 @@ impl Callsign {
         let call = call.into();
         let ssid = ssid.into();
 
-        let ssid = if ssid == "0" { None } else { Some(ssid.into()) };
+        let ssid = if ssid == "0" { None } else { Some(ssid) };
 
         Callsign { call, ssid }
     }
