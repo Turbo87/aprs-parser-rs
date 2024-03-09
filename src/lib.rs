@@ -63,7 +63,7 @@ mod base91;
 mod bytes;
 mod callsign;
 mod compressed_cs;
-mod compression_type;
+pub mod compression_type;
 mod error;
 mod lonlat;
 mod message;
