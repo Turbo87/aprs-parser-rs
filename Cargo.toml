@@ -1,6 +1,6 @@
 [package]
 name = "aprs-parser"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Tobias Bieniek <tobias.bieniek@gmail.com>"]
 description = "APRS message parser for Rust"
 readme = "README.md"
