@@ -199,6 +199,15 @@ impl AprsData {
             AprsData::Unknown(to) => Some(to),
         }
     }
+    pub fn data_type_identifier(&self) -> u8 {
+        match self {
+            AprsData::Position(p) => p.data_type_identifier,
+            AprsData::MicE(m) => m.data_type_identifier,
+            AprsData::Message(m) => m.data_type_identifier,
+            AprsData::Status(s) => s.data_type_identifier,
+            AprsData::Unknown(_) => 0x00,
+        }
+    }
 
     fn dest_field(&self) -> Cow<Callsign> {
         match self {
@@ -211,12 +220,13 @@ impl AprsData {
     }
 
     fn decode(s: &[u8], to: Callsign) -> Result<Self, DecodeError> {
-        Ok(match *s.first().unwrap_or(&0) {
+        let identifier = s.first().unwrap_or(&0);
+        Ok(match identifier {
             b':' => AprsData::Message(AprsMessage::decode(&s[1..], to)?),
             b'!' | b'/' | b'=' | b'@' => AprsData::Position(AprsPosition::decode(s, to)?),
             b'>' => AprsData::Status(AprsStatus::decode(&s[1..], to)?),
-            0x1c | b'`' => AprsData::MicE(AprsMicE::decode(&s[1..], to, true)?),
-            0x1d | b'\'' => AprsData::MicE(AprsMicE::decode(&s[1..], to, false)?),
+            0x1c | b'`' => AprsData::MicE(AprsMicE::decode(*identifier, &s[1..], to, true)?),
+            0x1d | b'\'' => AprsData::MicE(AprsMicE::decode(*identifier, &s[1..], to, false)?),
             _ => AprsData::Unknown(to),
         })
     }
@@ -379,6 +389,7 @@ mod tests {
                     Via::Callsign(Callsign::new_with_ssid("DB0KOE", "12"), false)
                 ],
                 data: AprsData::MicE(AprsMicE {
+                    data_type_identifier: b'`',
                     latitude: Latitude::new(51.041).unwrap(),
                     longitude: Longitude::new(6.495833333333334).unwrap(),
                     precision: Precision::HundredthMinute,

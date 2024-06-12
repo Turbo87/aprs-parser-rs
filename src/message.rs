@@ -7,6 +7,7 @@ use EncodeError;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsMessage {
     pub to: Callsign,
+    pub data_type_identifier: u8,
 
     pub addressee: Vec<u8>,
     pub text: Vec<u8>,
@@ -37,6 +38,7 @@ impl AprsMessage {
 
         Ok(Self {
             to,
+            data_type_identifier: b':',
 
             addressee,
             text,
@@ -110,6 +112,7 @@ mod tests {
                 to: default_callsign(),
                 addressee: b"DESTINATI".to_vec(),
                 id: Some(b"329A7D5Z4".to_vec()),
+                data_type_identifier: b':',
                 text: b"Hello World! This msg has a : colon ".to_vec()
             })
         );
@@ -128,6 +131,7 @@ mod tests {
                 to: default_callsign(),
                 addressee: b"DESTINATI".to_vec(),
                 id: Some(vec![]),
+                data_type_identifier: b':',
                 text: b"Hello World! This msg has a : colon ".to_vec()
             })
         );
@@ -146,7 +150,8 @@ mod tests {
                 to: default_callsign(),
                 addressee: b"DESTINATI".to_vec(),
                 id: None,
-                text: b"Hello World! This msg has a : colon ".to_vec()
+                text: b"Hello World! This msg has a : colon ".to_vec(),
+                data_type_identifier: b':',
             })
         );
     }

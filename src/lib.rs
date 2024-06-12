@@ -26,6 +26,7 @@
 //!                 ],
 //!                 data: AprsData::Position(
 //!                     AprsPosition {
+//!                         data_type_identifier: b'/',
 //!                         to: Callsign::new_no_ssid("APRS"),
 //!                         timestamp: Some(
 //!                             Timestamp::HHMMSS(

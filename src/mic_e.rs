@@ -150,10 +150,16 @@ pub struct AprsMicE {
     pub comment: Vec<u8>,
 
     pub current: bool,
+    pub data_type_identifier: u8,
 }
 
 impl AprsMicE {
-    pub fn decode(b: &[u8], to: Callsign, current: bool) -> Result<Self, DecodeError> {
+    pub fn decode(
+        data_type_identifier: u8,
+        b: &[u8],
+        to: Callsign,
+        current: bool,
+    ) -> Result<Self, DecodeError> {
         let (latitude, precision, message, long_offset, long_dir) =
             decode_callsign(&to).ok_or(DecodeError::InvalidMicEDestination(to))?;
 
@@ -170,6 +176,7 @@ impl AprsMicE {
         let symbol_table = info[7];
 
         Ok(Self {
+            data_type_identifier,
             latitude,
             longitude,
             precision,
@@ -569,10 +576,11 @@ mod tests {
         let information = &br#"(_fn"Oj/Hello world!"#[..];
         let to = Callsign::new_no_ssid("PPPPPP");
 
-        let data = AprsMicE::decode(information, to.clone(), true).unwrap();
+        let data = AprsMicE::decode(b'`', information, to.clone(), true).unwrap();
 
         assert_eq!(
             AprsMicE {
+                data_type_identifier: b'`',
                 latitude: Latitude::new(0.0).unwrap(),
                 longitude: Longitude::new(-112.12899999999999).unwrap(),
                 precision: Precision::HundredthMinute,
@@ -600,7 +608,7 @@ mod tests {
         let information = &br#"(_fn"Oj/Hello world!"#[..];
         let to = Callsign::new_no_ssid("S5PPW4");
 
-        let data = AprsMicE::decode(information, to.clone(), true).unwrap();
+        let data = AprsMicE::decode(b'`', information, to.clone(), true).unwrap();
 
         assert_eq!(to, data.encode_destination());
     }
