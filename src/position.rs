@@ -85,7 +85,7 @@ impl Default for Precision {
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPosition {
     pub to: Callsign,
-
+    pub data_type_identifier: u8,
     pub timestamp: Option<Timestamp>,
     pub messaging_supported: bool,
 
@@ -135,12 +135,13 @@ impl AprsPosition {
         // check for compressed position format
         let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
         match is_uncompressed_position {
-            true => Self::parse_uncompressed(b, to, timestamp, messaging_supported),
-            false => Self::parse_compressed(b, to, timestamp, messaging_supported),
+            true => Self::parse_uncompressed(first, b, to, timestamp, messaging_supported),
+            false => Self::parse_compressed(first, b, to, timestamp, messaging_supported),
         }
     }
 
     fn parse_compressed(
+        type_identifier: u8,
         b: &[u8],
         to: Callsign,
         timestamp: Option<Timestamp>,
@@ -178,6 +179,7 @@ impl AprsPosition {
 
         Ok(Self {
             to,
+            data_type_identifier: type_identifier,
             timestamp,
             messaging_supported,
             latitude,
@@ -191,6 +193,7 @@ impl AprsPosition {
     }
 
     fn parse_uncompressed(
+        type_identifier: u8,
         b: &[u8],
         to: Callsign,
         timestamp: Option<Timestamp>,
@@ -210,6 +213,7 @@ impl AprsPosition {
         let comment = b[19..].to_owned();
 
         Ok(Self {
+            data_type_identifier: type_identifier,
             to,
             timestamp,
             messaging_supported,
