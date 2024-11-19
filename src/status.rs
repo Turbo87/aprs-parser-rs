@@ -19,6 +19,7 @@ use Timestamp;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsStatus {
     pub to: Callsign,
+    pub data_type_identifier: u8,
 
     timestamp: Option<Timestamp>,
     comment: Vec<u8>,
@@ -29,6 +30,7 @@ impl AprsStatus {
         let timestamp = timestamp.map(|t| t.into());
         Self {
             to,
+            data_type_identifier: b'>',
             timestamp,
             comment,
         }
@@ -39,6 +41,7 @@ impl AprsStatus {
     /// Use this function to create an AprsStatus with any timestamp type
     pub fn new_noncompliant(to: Callsign, timestamp: Option<Timestamp>, comment: Vec<u8>) -> Self {
         Self {
+            data_type_identifier: b'>',
             to,
             timestamp,
             comment,
@@ -68,6 +71,7 @@ impl AprsStatus {
 
         Ok(AprsStatus {
             to,
+            data_type_identifier: b'>',
             timestamp,
             comment: comment.to_owned(),
         })
