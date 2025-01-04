@@ -276,7 +276,7 @@ impl Longitude {
 // returns the parsed value as well as the number of spaces we found
 fn parse_bytes_trailing_spaces(b: &[u8; 2], only_spaces: bool) -> Option<(u32, u8)> {
     if only_spaces {
-        if b == &[b' ', b' '] {
+        if b == b"  " {
             return Some((0, 2));
         } else {
             return None;

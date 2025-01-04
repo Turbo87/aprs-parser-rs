@@ -68,6 +68,7 @@ mod error;
 mod lonlat;
 mod message;
 pub mod mic_e;
+mod object;
 mod packet;
 mod position;
 mod status;

@@ -1,5 +1,4 @@
 use Callsign;
-
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum DecodeError {
     #[error("Invalid Callsign: {0:?}")]
@@ -28,6 +27,8 @@ pub enum DecodeError {
     InvalidMicEDestination(Callsign),
     #[error("Invalid Mic-E information field: {0:?}")]
     InvalidMicEInformation(Vec<u8>),
+    #[error("Invalid Object format {0:?}, {1}")]
+    InvalidObjectFormat(Vec<u8>, String),
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -187,9 +187,9 @@ impl AprsMicE {
 
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         if self.current {
-            buf.write_all(&[b'`'])?;
+            buf.write_all(b"`")?;
         } else {
-            buf.write_all(&[b'\''])?;
+            buf.write_all(b"'")?;
         }
 
         self.encode_longitude(buf)?;
