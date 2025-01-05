@@ -27,8 +27,10 @@ pub enum DecodeError {
     InvalidMicEDestination(Callsign),
     #[error("Invalid Mic-E information field: {0:?}")]
     InvalidMicEInformation(Vec<u8>),
-    #[error("Invalid Object format {0:?}, {1}")]
-    InvalidObjectFormat(Vec<u8>, String),
+    #[error("Invalid Object name {0:?}")]
+    InvalidObjectName(Vec<u8>),
+    #[error("Invalid Object liveness, expected '*' or '(space)', got '{0:?}'")]
+    InvalidObjectLiveness(char),
 }
 
 #[derive(Debug, thiserror::Error)]

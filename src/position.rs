@@ -140,7 +140,7 @@ impl AprsPosition {
         }
     }
 
-    fn parse_compressed(
+    pub(crate) fn parse_compressed(
         b: &[u8],
         to: Callsign,
         timestamp: Option<Timestamp>,
@@ -190,7 +190,7 @@ impl AprsPosition {
         })
     }
 
-    fn parse_uncompressed(
+    pub(crate) fn parse_uncompressed(
         b: &[u8],
         to: Callsign,
         timestamp: Option<Timestamp>,

@@ -73,6 +73,7 @@ mod packet;
 mod position;
 mod status;
 mod timestamp;
+mod utils;
 mod via;
 
 pub use callsign::Callsign;

@@ -28,7 +28,7 @@ impl AprsMessage {
             return Err(DecodeError::InvalidMessageDestination(addressee.to_owned()));
         }
 
-        trim_spaces_end(&mut addressee);
+        crate::utils::trim_spaces_end(&mut addressee);
 
         let text = splitter.next().unwrap_or(&[]);
         let mut text_splitter = text.splitn(2, |x| *x == b'{');
@@ -67,12 +67,6 @@ impl AprsMessage {
 
         Ok(())
     }
-}
-
-fn trim_spaces_end(arr: &mut Vec<u8>) {
-    let space_count = arr.iter().rev().take_while(|&&b| b == b' ').count();
-
-    arr.truncate(arr.len() - space_count);
 }
 
 #[cfg(test)]
