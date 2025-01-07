@@ -1,4 +1,6 @@
 use Callsign;
+
+use crate::Extension;
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum DecodeError {
     #[error("Invalid Callsign: {0:?}")]
@@ -31,6 +33,21 @@ pub enum DecodeError {
     InvalidObjectName(Vec<u8>),
     #[error("Invalid Object liveness, expected '*' or '(space)', got '{0:?}'")]
     InvalidObjectLiveness(char),
+    #[error("Invalid Extension data: {0:?}")]
+    InvalidExtension(Vec<u8>),
+
+    #[error("Invalid Extension Range value: {0:?}")]
+    InvalidExtensionRange(Vec<u8>),
+
+    #[error("Invalid Extension Direction/Speed value: {0:?}")]
+    InvalidExtensionDirectionSpeed(Vec<u8>),
+    #[error("Invalid Extension PHG value: {0:?}")]
+    InvalidExtensionPhg(Vec<u8>),
+    #[error("Invalid Extension DFS value: {0:?}")]
+    InvalidExtensionDfs(Vec<u8>),
+
+    #[error("Invalid Extension Area value: {0:?}")]
+    InvalidExtensionArea(Vec<u8>),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -49,4 +66,7 @@ pub enum EncodeError {
     NonGgaAltitude,
     #[error(transparent)]
     Write(#[from] std::io::Error),
+
+    #[error("Invalid Extension value: {0:?}")]
+    InvalidExtension(Extension),
 }

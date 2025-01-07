@@ -8,7 +8,7 @@
 //! ```rust
 //! extern crate aprs_parser;
 //!
-//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, Callsign, Latitude, Longitude, Precision, Timestamp, Via, QConstruct};
+//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, Callsign, Latitude, Longitude, Precision, Timestamp, Via, QConstruct, Position};
 //!
 //! fn main() {
 //!     let result = AprsPacket::decode_textual(
@@ -35,13 +35,15 @@
 //!                             )
 //!                         ),
 //!                         messaging_supported: false,
-//!                         latitude: Latitude::new(48.36016666666667).unwrap(),
-//!                         longitude: Longitude::new(12.408166666666666).unwrap(),
-//!                         precision: Precision::HundredthMinute,
-//!                         symbol_table: '\\',
-//!                         symbol_code: '^',
+//!                         position: Position {
+//!                             latitude: Latitude::new(48.36016666666667).unwrap(),
+//!                             longitude: Longitude::new(12.408166666666666).unwrap(),
+//!                             precision: Precision::HundredthMinute,
+//!                             symbol_table: '\\',
+//!                             symbol_code: '^',
+//!                             cst: AprsCst::Uncompressed,
+//!                         },
 //!                         comment: b"322/103/A=003054".to_vec(),
-//!                         cst: AprsCst::Uncompressed,
 //!                     }
 //!                 )
 //!             }
@@ -65,28 +67,33 @@ mod callsign;
 mod compressed_cs;
 pub mod compression_type;
 mod error;
-mod lonlat;
+
 mod message;
 pub mod mic_e;
 mod object;
 mod packet;
 mod position;
 mod status;
-mod timestamp;
+
+mod components;
 mod utils;
 mod via;
 
 pub use callsign::Callsign;
+
+pub use components::extensions::*;
+pub use components::lonlat::{Latitude, Longitude, Precision};
+pub use components::position::*;
+pub use components::timestamp::{DhmTimestamp, Timestamp};
 pub use compressed_cs::{AprsAltitude, AprsCompressedCs, AprsCourseSpeed, AprsRadioRange};
 pub use compression_type::AprsCompressionType;
 pub use error::{DecodeError, EncodeError};
-pub use lonlat::{Latitude, Longitude};
+
 pub use message::AprsMessage;
 pub use mic_e::AprsMicE;
 pub use packet::{AprsData, AprsPacket};
-pub use position::{AprsCst, AprsPosition, Precision};
+pub use position::AprsPosition;
 pub use status::AprsStatus;
-pub use timestamp::{DhmTimestamp, Timestamp};
 pub use via::{QConstruct, Via};
 
 #[cfg(test)]

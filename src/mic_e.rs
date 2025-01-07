@@ -5,9 +5,8 @@ use Callsign;
 use DecodeError;
 use EncodeError;
 use Latitude;
+use Longitude;
 use Precision;
-
-use crate::Longitude;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Message {

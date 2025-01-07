@@ -251,6 +251,8 @@ impl AprsData {
 
 #[cfg(test)]
 mod tests {
+    use crate::components::position::Position;
+
     use super::*;
     use mic_e::{Course, Message, Speed};
     use AprsCst;
@@ -276,8 +278,8 @@ mod tests {
         match result.data {
             AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-                assert_eq!(position.latitude.value(), 48.36016666666667);
-                assert_eq!(position.longitude.value(), 12.408166666666666);
+                assert_eq!(position.position.latitude.value(), 48.36016666666667);
+                assert_eq!(position.position.longitude.value(), 12.408166666666666);
                 assert_eq!(
                     position.comment,
                     b"322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
@@ -411,13 +413,16 @@ mod tests {
                 to: Callsign::new_no_ssid("NOBODY"),
                 timestamp: None,
                 messaging_supported: true,
-                latitude: Latitude::new(33.999999999999).unwrap(),
-                longitude: Longitude::new(33.999999999999).unwrap(),
-                precision: Precision::HundredthMinute,
-                symbol_table: '/',
-                symbol_code: 'c',
+                position: Position {
+                    latitude: Latitude::new(33.999999999999).unwrap(),
+                    longitude: Longitude::new(33.999999999999).unwrap(),
+                    precision: Precision::HundredthMinute,
+                    symbol_table: '/',
+                    symbol_code: 'c',
+                    cst: AprsCst::Uncompressed,
+                },
+
                 comment: b"Hello world".to_vec(),
-                cst: AprsCst::Uncompressed,
             }),
         };
 
@@ -438,13 +443,15 @@ mod tests {
                 to: Callsign::new_with_ssid("NOBODY", "0"),
                 timestamp: None,
                 messaging_supported: true,
-                latitude: Latitude::new(3.95).unwrap(),
-                longitude: Longitude::new(-4.58).unwrap(),
-                precision: Precision::HundredthMinute,
-                symbol_table: '/',
-                symbol_code: 'c',
+                position: Position {
+                    latitude: Latitude::new(3.95).unwrap(),
+                    longitude: Longitude::new(-4.58).unwrap(),
+                    precision: Precision::HundredthMinute,
+                    symbol_table: '/',
+                    symbol_code: 'c',
+                    cst: AprsCst::Uncompressed,
+                },
                 comment: b"Hello world".to_vec(),
-                cst: AprsCst::Uncompressed,
             }),
         };
 

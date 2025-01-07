@@ -15,7 +15,9 @@ use DecodeError;
 use EncodeError;
 use Timestamp;
 
-use crate::{AprsCst, AprsPosition};
+use AprsCst;
+use Extension;
+use Position;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AprsObject {
@@ -23,13 +25,12 @@ pub struct AprsObject {
     pub name: Vec<u8>,
     pub live: bool,
     pub timestamp: Timestamp,
-    pub position: AprsPosition,
+    pub position: Position,
+    pub extension: Option<Extension>,
+    pub comment: Vec<u8>,
 }
 
 impl AprsObject {
-    pub fn comment(&self) -> &[u8] {
-        &self.position.comment
-    }
     pub fn decode(b: &[u8], to: Callsign) -> Result<Self, DecodeError> {
         // format for uncompressed is
         // N Bytes      Description/Value
@@ -41,7 +42,7 @@ impl AprsObject {
         // [1]          (sym table id)
         // [9]          (longitude)
         // [1]          (sym code)
-        // [7/0]        (extended data [NOT PARSING])
+        // [7/0]        (extended data)
         // [0-36/0-43]  (comment)
         //
 
@@ -65,45 +66,38 @@ impl AprsObject {
             ' ' => Ok(false),
             others => Err(DecodeError::InvalidObjectLiveness(others)),
         }?;
+        let timestamp_bytes = b
+            .get(10..17)
+            .ok_or_else(|| DecodeError::InvalidTimestamp(b.to_vec()))?;
+        let timestamp = Timestamp::try_from(timestamp_bytes)?;
 
-        let timestamp = Timestamp::try_from(b.get(10..17).unwrap())?;
+        let position = Position::decode(
+            b.get(17..)
+                .ok_or_else(|| DecodeError::InvalidTimestamp(b.to_vec()))?,
+        )?;
 
-        // ok, here we switch, it COULD be compressed, or it COULD be uncompressed
-        // if the leading character is a numeric, it's an uncompressed
-        // if it's alpha it's compressed
-        let compressed = !(*b.get(17).unwrap_or(&0) as char).is_numeric();
+        // decide where the comment comes from
+        let (extension, comment) = if matches!(position.cst, AprsCst::Uncompressed) {
+            // opportunistically decode extensions if we can
 
-        if compressed {
-            let position = AprsPosition::parse_compressed(
-                &b[17..],
-                to.clone(),
-                Some(timestamp.clone()),
-                false,
-            )?;
-
-            Ok(Self {
-                to,
-                name,
-                live,
-                timestamp,
-                position,
-            })
+            if let Some(ext) = b.get(36..43).and_then(|ext| Extension::decode(ext).ok()) {
+                (Some(ext), b[43..].to_vec())
+            } else {
+                (None, b[36..].to_vec())
+            }
         } else {
-            let position = AprsPosition::parse_uncompressed(
-                &b[17..],
-                to.clone(),
-                Some(timestamp.clone()),
-                false,
-            )?;
+            (None, b[30..].to_vec())
+        };
 
-            Ok(Self {
-                to,
-                name,
-                live,
-                timestamp,
-                position,
-            })
-        }
+        Ok(Self {
+            to,
+            name,
+            live,
+            timestamp,
+            position,
+            comment,
+            extension,
+        })
     }
 
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
@@ -140,38 +134,18 @@ impl AprsObject {
 
         write!(buf, "{}", if self.live { '*' } else { ' ' })?;
         self.timestamp.encode(buf)?;
-        match self.position.cst {
-            AprsCst::CompressedSome { cs, t } => {
-                write!(buf, "{}", self.position.symbol_table)?;
 
-                self.position.latitude.encode_compressed(buf)?;
-                self.position.longitude.encode_compressed(buf)?;
-
-                write!(buf, "{}", self.position.symbol_code)?;
-
-                cs.encode(buf, t)?;
-            }
-            AprsCst::CompressedNone => {
-                write!(buf, "{}", self.position.symbol_table)?;
-
-                self.position.latitude.encode_compressed(buf)?;
-                self.position.longitude.encode_compressed(buf)?;
-
-                write!(buf, "{}", self.position.symbol_code)?;
-
-                write!(buf, " sT")?; // no cst
-            }
-            AprsCst::Uncompressed => {
-                self.position
-                    .latitude
-                    .encode_uncompressed(buf, self.position.precision)?;
-                write!(buf, "{}", self.position.symbol_table)?;
-                self.position.longitude.encode_uncompressed(buf)?;
-                write!(buf, "{}", self.position.symbol_code)?;
-            }
+        // if we have extensions, we have to do an uncompressed encoding to support it
+        if let Some(ext) = &self.extension {
+            self.position.encode_uncompressed(buf)?;
+            ext.encode(buf)?;
+        } else if matches!(self.position.cst, AprsCst::Uncompressed) {
+            self.position.encode_uncompressed(buf)?; // just uncompressed, no extensions
+        } else {
+            self.position.encode_compressed(buf)?;
         }
 
-        buf.write_all(&self.position.comment)?;
+        buf.write_all(&self.comment)?;
 
         Ok(())
     }
@@ -180,7 +154,7 @@ impl AprsObject {
 #[cfg(test)]
 mod tests {
 
-    use crate::{AprsData, AprsPacket};
+    use crate::{AprsData, AprsPacket, Directivity};
 
     use super::*;
 
@@ -195,10 +169,7 @@ mod tests {
             assert!(o.live);
             assert_eq!(o.position.symbol_table, '\\');
             assert_eq!(o.position.symbol_code, 'h');
-            assert_eq!(
-                o.position.comment,
-                "146.940MHz T100 Huntsville Hamfest".as_bytes()
-            );
+            assert_eq!(o.comment, "146.940MHz T100 Huntsville Hamfest".as_bytes());
             assert_eq!(o.position.cst, AprsCst::Uncompressed);
             assert_relative_eq!(*o.position.latitude, 34.725833333333334);
             assert_relative_eq!(*o.position.longitude, -86.59116666666667);
@@ -219,6 +190,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_uncompressed_live_object_short_name_extensions() {
+        let packet = AprsPacket::decode_textual(b"N8DEU-7>APZWX,WIDE2-2:;HFEST     170403z3443.55N\\08635.47WhPHG5132146.940MHz T100 Huntsville Hamfest").unwrap();
+
+        assert!(matches!(packet.data, AprsData::Object(_)));
+
+        if let AprsData::Object(o) = packet.data {
+            assert_eq!(o.name, b"HFEST");
+            assert!(!o.live);
+            assert_eq!(o.position.symbol_table, '\\');
+            assert!(matches!(
+                o.extension,
+                Some(Extension::PowerHeightGainDirectivity {
+                    power_watts: 25,
+                    antenna_height_feet: 20,
+                    antenna_gain_db: 3,
+                    antenna_directivity: Directivity::DirectionDegrees(90)
+                })
+            ));
+        }
+    }
+
+    #[test]
     fn parse_uncompressed_object_no_comment() {
         let packet = AprsPacket::decode_textual(
             b"N8DEU-7>APZWX,WIDE2-2:;HFEST-18H*170403z3443.55N\\08635.47Wh",
@@ -232,7 +225,7 @@ mod tests {
             assert!(o.live);
             assert_eq!(o.position.symbol_table, '\\');
             assert_eq!(o.position.symbol_code, 'h');
-            assert_eq!(o.comment(), []);
+            assert_eq!(o.comment, []);
             assert_eq!(o.position.cst, AprsCst::Uncompressed);
             assert_relative_eq!(*o.position.latitude, 34.725833333333334);
             assert_relative_eq!(*o.position.longitude, -86.59116666666667);
@@ -254,7 +247,7 @@ mod tests {
             assert_relative_eq!(*o.position.latitude, 49.5);
             assert_relative_eq!(*o.position.longitude, -72.75000393777269);
             assert_eq!(o.position.symbol_code, '>');
-            assert_eq!(o.position.comment, "Moving to the north".as_bytes());
+            assert_eq!(o.comment, "Moving to the north".as_bytes());
         }
     }
 

@@ -1,11 +1,72 @@
 use std::io::Write;
-use std::ops::Deref;
+use std::ops::{Deref, RangeInclusive};
 
 use base91;
 use bytes::parse_bytes;
 use DecodeError;
 use EncodeError;
-use Precision;
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+pub enum Precision {
+    TenDegree,
+    OneDegree,
+    TenMinute,
+    OneMinute,
+    TenthMinute,
+    HundredthMinute,
+}
+
+impl Precision {
+    /// Returns the width of the precision in degrees.
+    /// For example, `Precision::OneDegree` would return 1.0.
+    pub fn width(&self) -> f64 {
+        match self {
+            Precision::HundredthMinute => 1.0 / 6000.0,
+            Precision::TenthMinute => 1.0 / 600.0,
+            Precision::OneMinute => 1.0 / 60.0,
+            Precision::TenMinute => 1.0 / 6.0,
+            Precision::OneDegree => 1.0,
+            Precision::TenDegree => 10.0,
+        }
+    }
+
+    pub(crate) fn range(&self, center: f64) -> RangeInclusive<f64> {
+        let width = self.width();
+
+        (center - (width / 2.0))..=(center + (width / 2.0))
+    }
+
+    pub(crate) fn num_digits(&self) -> u8 {
+        match self {
+            Precision::HundredthMinute => 0,
+            Precision::TenthMinute => 1,
+            Precision::OneMinute => 2,
+            Precision::TenMinute => 3,
+            Precision::OneDegree => 4,
+            Precision::TenDegree => 5,
+        }
+    }
+
+    pub(crate) fn from_num_digits(digits: u8) -> Option<Self> {
+        let res = match digits {
+            0 => Precision::HundredthMinute,
+            1 => Precision::TenthMinute,
+            2 => Precision::OneMinute,
+            3 => Precision::TenMinute,
+            4 => Precision::OneDegree,
+            5 => Precision::TenDegree,
+            _ => return None,
+        };
+
+        Some(res)
+    }
+}
+
+impl Default for Precision {
+    fn default() -> Self {
+        Self::HundredthMinute
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default)]
 pub struct Latitude(f64);
@@ -292,6 +353,13 @@ fn parse_bytes_trailing_spaces(b: &[u8; 2], only_spaces: bool) -> Option<(u32, u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn precision_e2e() {
+        for i in 0..6 {
+            assert_eq!(i, Precision::from_num_digits(i).unwrap().num_digits());
+        }
+    }
 
     #[test]
     fn test_latitude_out_of_bounds() {
