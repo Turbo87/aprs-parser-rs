@@ -11,6 +11,7 @@ use DecodeError;
 use EncodeError;
 use Via;
 
+use crate::item::AprsItem;
 use crate::object::AprsObject;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -189,6 +190,7 @@ pub enum AprsData {
     Status(AprsStatus),
     MicE(AprsMicE),
     Object(AprsObject),
+    Item(AprsItem),
     Unknown(Callsign),
 }
 
@@ -200,6 +202,7 @@ impl AprsData {
             AprsData::Status(s) => Some(&s.to),
             AprsData::MicE(_) => None,
             AprsData::Object(_) => None,
+            AprsData::Item(_) => None,
             AprsData::Unknown(to) => Some(to),
         }
     }
@@ -212,6 +215,7 @@ impl AprsData {
             AprsData::MicE(m) => Cow::Owned(m.encode_destination()),
             AprsData::Unknown(to) => Cow::Borrowed(to),
             AprsData::Object(o) => Cow::Borrowed(&o.to),
+            AprsData::Item(i) => Cow::Borrowed(&i.to),
         }
     }
 
@@ -223,6 +227,7 @@ impl AprsData {
             0x1c | b'`' => AprsData::MicE(AprsMicE::decode(&s[1..], to, true)?),
             0x1d | b'\'' => AprsData::MicE(AprsMicE::decode(&s[1..], to, false)?),
             b';' => AprsData::Object(AprsObject::decode(&s[1..], to)?),
+            b')' => AprsData::Item(AprsItem::decode(&s[1..], to)?),
             _ => AprsData::Unknown(to),
         })
     }
@@ -242,6 +247,7 @@ impl AprsData {
                 m.encode(buf)?;
             }
             Self::Object(o) => o.encode(buf)?,
+            Self::Item(i) => i.encode(buf)?,
             Self::Unknown(_) => return Err(EncodeError::InvalidData),
         }
 

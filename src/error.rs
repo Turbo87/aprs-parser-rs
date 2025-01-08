@@ -33,6 +33,10 @@ pub enum DecodeError {
     InvalidObjectName(Vec<u8>),
     #[error("Invalid Object liveness, expected '*' or '(space)', got '{0:?}'")]
     InvalidObjectLiveness(char),
+    #[error("Invalid Item name {0:?}")]
+    InvalidItemName(Vec<u8>),
+    #[error("Invalid Item liveness, expected '!' or '(space)', got '{0:?}'")]
+    InvalidItemLiveness(char),
     #[error("Invalid Extension data: {0:?}")]
     InvalidExtension(Vec<u8>),
 

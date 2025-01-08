@@ -68,6 +68,7 @@ mod compressed_cs;
 pub mod compression_type;
 mod error;
 
+mod item;
 mod message;
 pub mod mic_e;
 mod object;
@@ -91,6 +92,7 @@ pub use error::{DecodeError, EncodeError};
 
 pub use message::AprsMessage;
 pub use mic_e::AprsMicE;
+pub use object::AprsObject;
 pub use packet::{AprsData, AprsPacket};
 pub use position::AprsPosition;
 pub use status::AprsStatus;
