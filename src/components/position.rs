@@ -67,7 +67,7 @@ impl Position {
     ///
     /// all position representations interleave the symbol table and code
     /// so we stuff it all in here
-    pub(crate) fn decode(b: &[u8]) -> Result<Self, DecodeError> {
+    pub(crate) fn decode(b: &[u8]) -> Result<(Option<&[u8]>, Self), DecodeError> {
         let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
         if is_uncompressed_position {
             let (latitude, precision) = Latitude::parse_uncompressed(&b[0..8])?;
@@ -76,14 +76,17 @@ impl Position {
             let symbol_table = b[8] as char;
             let symbol_code = b[18] as char;
 
-            Ok(Self {
-                latitude,
-                longitude,
-                precision,
-                symbol_code,
-                symbol_table,
-                cst: AprsCst::Uncompressed,
-            })
+            Ok((
+                b.get(19..),
+                Self {
+                    latitude,
+                    longitude,
+                    precision,
+                    symbol_code,
+                    symbol_table,
+                    cst: AprsCst::Uncompressed,
+                },
+            ))
         } else {
             let symbol_table = b[0] as char;
             let comp_lat = &b[1..5];
@@ -110,14 +113,17 @@ impl Position {
                     AprsCst::CompressedSome { cs, t }
                 }
             };
-            Ok(Self {
-                latitude,
-                longitude,
-                precision: Precision::default(),
-                symbol_code,
-                symbol_table,
-                cst,
-            })
+            Ok((
+                b.get(13..),
+                Self {
+                    latitude,
+                    longitude,
+                    precision: Precision::default(),
+                    symbol_code,
+                    symbol_table,
+                    cst,
+                },
+            ))
         }
     }
 }

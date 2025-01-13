@@ -2,7 +2,6 @@ use std::{convert::TryFrom, io::Write};
 
 use crate::{bytes::parse_bytes, DecodeError, EncodeError};
 #[derive(Clone, Debug, PartialEq)]
-
 pub enum Directivity {
     Omni,
     DirectionDegrees(u16),
@@ -35,7 +34,6 @@ impl From<Directivity> for u8 {
     }
 }
 #[derive(Clone, Debug, PartialEq)]
-
 pub enum Extension {
     // this is a single defn for both
     // course/speed and direction/speed
@@ -61,7 +59,7 @@ pub enum Extension {
         antenna_directivity: Directivity,
     },
     AreaObjectDescriptor {
-        r#type: u8,
+        object_type: u8,
         color: u8,
     },
 }
@@ -133,7 +131,10 @@ impl Extension {
 
                 write!(buf, "DFS{s_value}{height_value}{gain_value}{directivitity}")?;
             }
-            Extension::AreaObjectDescriptor { r#type, color } => {
+            Extension::AreaObjectDescriptor {
+                object_type: r#type,
+                color,
+            } => {
                 write!(buf, "T{:2}/C{:2}", r#type, color)?;
             }
         }
@@ -220,7 +221,7 @@ impl Extension {
             }
             // 'Txx'
             &[AREA_TYPE_T, _, _] => Ok(Self::AreaObjectDescriptor {
-                r#type: parse_bytes(&bytes[1..3])
+                object_type: parse_bytes(&bytes[1..3])
                     .ok_or_else(|| DecodeError::InvalidExtensionArea(b.to_vec()))?,
                 color: parse_bytes(&bytes[5..])
                     .ok_or_else(|| DecodeError::InvalidExtensionArea(b.to_vec()))?,

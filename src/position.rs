@@ -44,13 +44,9 @@ impl AprsPosition {
         let b = if has_timestamp { &b[8..] } else { &b[1..] };
 
         // decode the position and symbol data
-        let position = Position::decode(b)?;
-        // decide where the comment comes from
-        let comment = if matches!(position.cst, AprsCst::Uncompressed) {
-            b[19..].to_vec()
-        } else {
-            b[13..].to_vec()
-        };
+        let (remaining_buffer, position) = Position::decode(b)?;
+        // comment is entire rest of buffer, blank comment if not provided
+        let comment = remaining_buffer.unwrap_or_default().to_vec();
 
         Ok(Self {
             to,

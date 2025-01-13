@@ -9,14 +9,7 @@
 
 use std::io::Write;
 
-use Callsign;
-use DecodeError;
-
-use EncodeError;
-
-use AprsCst;
-use Extension;
-use Position;
+use crate::{AprsCst, Callsign, DecodeError, EncodeError, Extension, Position};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AprsItem {
@@ -66,7 +59,7 @@ impl AprsItem {
             others => Err(DecodeError::InvalidItemLiveness(others)),
         }?;
 
-        let position = Position::decode(
+        let (remaining_buffer, position) = Position::decode(
             b.get(packet_offset_index + 1..)
                 .ok_or_else(|| DecodeError::InvalidTimestamp(b.to_vec()))?,
         )?;
@@ -74,17 +67,23 @@ impl AprsItem {
         // decide where the comment comes from
         let (extension, comment) = if matches!(position.cst, AprsCst::Uncompressed) {
             // opportunistically decode extensions if we can
-
-            if let Some(ext) = b
-                .get(packet_offset_index + 20..packet_offset_index + 27)
-                .and_then(|ext| Extension::decode(ext).ok())
-            {
-                (Some(ext), b[packet_offset_index + 27..].to_vec())
+            if let Some(comment_bytes) = remaining_buffer {
+                if let Some(ext) = comment_bytes
+                    .get(..7)
+                    .and_then(|ext| Extension::decode(ext).ok())
+                {
+                    (
+                        Some(ext),
+                        comment_bytes.get(7..).unwrap_or_default().to_vec(),
+                    )
+                } else {
+                    (None, comment_bytes.to_vec())
+                }
             } else {
-                (None, b[packet_offset_index + 20..].to_vec())
+                (None, vec![])
             }
         } else {
-            (None, b[packet_offset_index + 14..].to_vec())
+            (None, remaining_buffer.unwrap_or_default().to_vec())
         };
 
         Ok(Self {

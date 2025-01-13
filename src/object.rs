@@ -71,7 +71,7 @@ impl AprsObject {
             .ok_or_else(|| DecodeError::InvalidTimestamp(b.to_vec()))?;
         let timestamp = Timestamp::try_from(timestamp_bytes)?;
 
-        let position = Position::decode(
+        let (remaining_buffer, position) = Position::decode(
             b.get(17..)
                 .ok_or_else(|| DecodeError::InvalidTimestamp(b.to_vec()))?,
         )?;
@@ -79,14 +79,23 @@ impl AprsObject {
         // decide where the comment comes from
         let (extension, comment) = if matches!(position.cst, AprsCst::Uncompressed) {
             // opportunistically decode extensions if we can
-
-            if let Some(ext) = b.get(36..43).and_then(|ext| Extension::decode(ext).ok()) {
-                (Some(ext), b[43..].to_vec())
+            if let Some(comment_bytes) = remaining_buffer {
+                if let Some(ext) = comment_bytes
+                    .get(..7)
+                    .and_then(|ext| Extension::decode(ext).ok())
+                {
+                    (
+                        Some(ext),
+                        comment_bytes.get(7..).unwrap_or_default().to_vec(),
+                    )
+                } else {
+                    (None, comment_bytes.to_vec())
+                }
             } else {
-                (None, b[36..].to_vec())
+                (None, vec![])
             }
         } else {
-            (None, b[30..].to_vec())
+            (None, remaining_buffer.unwrap_or_default().to_vec())
         };
 
         Ok(Self {
