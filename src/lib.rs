@@ -82,10 +82,12 @@ mod via;
 
 pub use callsign::Callsign;
 
-pub use components::extensions::*;
-pub use components::lonlat::{Latitude, Longitude, Precision};
-pub use components::position::*;
-pub use components::timestamp::{DhmTimestamp, Timestamp};
+pub use components::{
+    extensions::*,
+    lonlat::{Latitude, Longitude, Precision},
+    position::*,
+    timestamp::{DhmTimestamp, Timestamp},
+};
 pub use compressed_cs::{AprsAltitude, AprsCompressedCs, AprsCourseSpeed, AprsRadioRange};
 pub use compression_type::AprsCompressionType;
 pub use error::{DecodeError, EncodeError};
