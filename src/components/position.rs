@@ -68,8 +68,15 @@ impl Position {
     /// all position representations interleave the symbol table and code
     /// so we stuff it all in here
     pub(crate) fn decode(b: &[u8]) -> Result<(Option<&[u8]>, Self), DecodeError> {
+        // make sure we're not empty
+        if b.is_empty() {
+            return Err(DecodeError::InvalidPosition(b.to_vec()));
+        }
         let is_uncompressed_position = (*b.first().unwrap_or(&0) as char).is_numeric();
         if is_uncompressed_position {
+            if b.len() < 19 {
+                return Err(DecodeError::InvalidPosition(b.to_vec()));
+            }
             let (latitude, precision) = Latitude::parse_uncompressed(&b[0..8])?;
             let longitude = Longitude::parse_uncompressed(&b[9..18], precision)?;
 
@@ -88,6 +95,9 @@ impl Position {
                 },
             ))
         } else {
+            if b.len() < 13 {
+                return Err(DecodeError::InvalidPosition(b.to_vec()));
+            }
             let symbol_table = b[0] as char;
             let comp_lat = &b[1..5];
             let comp_lon = &b[5..9];

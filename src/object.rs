@@ -61,7 +61,7 @@ impl AprsObject {
             .to_vec();
 
         crate::utils::trim_spaces_end(&mut name);
-        let live = match *b.get(9).unwrap() as char {
+        let live = match *b.get(9).ok_or(DecodeError::InvalidObject)? as char {
             '*' => Ok(true),
             ' ' => Ok(false),
             others => Err(DecodeError::InvalidObjectLiveness(others)),

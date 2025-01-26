@@ -53,7 +53,7 @@ impl AprsItem {
             return Err(DecodeError::InvalidItemName(b.to_vec()));
         }
 
-        let live = match *b.get(packet_offset_index).unwrap() as char {
+        let live = match *b.get(packet_offset_index).ok_or(DecodeError::InvalidItem)? as char {
             '!' => Ok(true),
             ' ' => Ok(false),
             others => Err(DecodeError::InvalidItemLiveness(others)),
