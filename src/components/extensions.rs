@@ -45,7 +45,7 @@ pub enum Extension {
     },
     PowerHeightGainDirectivity {
         power_watts: u16,
-        antenna_height_feet: u16,
+        antenna_height_feet: u32,
         antenna_gain_db: u8,
         antenna_directivity: Directivity,
     },
@@ -154,9 +154,14 @@ impl Extension {
                     .ok_or_else(|| DecodeError::InvalidExtensionRange(b.to_vec()))?,
             }),
             b"PHG" => {
+                // we do as u16 here because we want to allow up to P^2 values for POWER
+                // so power_code is a byte in range [0, 255]
+                // therefore power**2 can be [1, 65025]
+                // but we need power_code to be a u16 lest we panic with a "attempt to multiply with overflow"
                 let power_code = (bytes[3] as char)
                     .to_digit(10)
-                    .ok_or_else(|| DecodeError::InvalidExtensionPhg(b.to_vec()))?;
+                    .ok_or_else(|| DecodeError::InvalidExtensionPhg(b.to_vec()))?
+                    as u16;
 
                 /*
                 The height code may in fact be any ASCII character 0–9 and above. This is
@@ -164,10 +169,22 @@ impl Extension {
                 For example:
                 : is the height code for 10240 feet (approximately 1.9 miles).
                 ; is the height code for 20480 feet (approximately 3.9 miles), and so on.
-                                */
+
+                the max value for this is not presribed in APRS101, so we will bound it
+                to something that fits in a u32, so the max of height_code can be 28 (after ASCII adjustment)
+                which gives (2**28)*10 = 2684354560 feet (approx. 508k miles...)
+
+
+                */
                 let height_code = bytes[4]
                     .checked_sub(48)
-                    .ok_or_else(|| DecodeError::InvalidExtensionPhg(b.to_vec()))?;
+                    .ok_or_else(|| DecodeError::InvalidExtensionPhg(b.to_vec()))?
+                    as u32;
+
+                if !(0..29).contains(&height_code) {
+                    // too big!
+                    return Err(DecodeError::InvalidExtensionPhg(b.to_vec()));
+                }
 
                 let gain_code = (bytes[5] as char)
                     .to_digit(10)
@@ -180,8 +197,8 @@ impl Extension {
                     .map_err(|_| DecodeError::InvalidExtensionPhg(b.to_vec()))?;
 
                 Ok(Self::PowerHeightGainDirectivity {
-                    power_watts: power_code.pow(2) as u16,
-                    antenna_height_feet: 2u16.pow(height_code as u32) * 10,
+                    power_watts: power_code.pow(2),
+                    antenna_height_feet: 2u32.pow(height_code) * 10,
                     antenna_gain_db: gain_code as u8,
                     antenna_directivity: directivtity,
                 })
@@ -247,6 +264,8 @@ impl Extension {
 
 #[cfg(test)]
 mod test {
+    use crate::AprsPacket;
+
     use super::*;
     #[test]
     fn test_parse_course_speed() {
@@ -309,6 +328,29 @@ mod test {
     }
 
     #[test]
+    fn test_parse_phg_absurd_height2() {
+        let phg = br"PHG5L32";
+
+        let phg = Extension::decode(phg).unwrap();
+        assert!(matches!(
+            phg,
+            Extension::PowerHeightGainDirectivity {
+                power_watts: 25,
+                antenna_height_feet: 2684354560, // wow
+                antenna_gain_db: 3,
+                antenna_directivity: Directivity::DirectionDegrees(90)
+            }
+        ));
+    }
+
+    #[test]
+    fn test_parse_phg_max_height() {
+        let phg = br"PHG5\xcb32";
+
+        assert!(Extension::decode(phg).is_err());
+    }
+
+    #[test]
     fn test_parse_rng() {
         let cse_speed = b"RNG2345";
 
@@ -339,5 +381,21 @@ mod test {
         let mut buf = Vec::new();
 
         assert!(ext.encode(&mut buf).is_err())
+    }
+
+    #[test]
+    fn test_absurd_values1() {
+        let raw_packet = [
+            125, 13, 0, 0, 0, 5, 0, 0, 0, 0, 0, 1, 104, 1, 0, 0, 62, 0, 1, 1, 10, 4, 6, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 58, 59, 18, 74, 146, 36, 73, 146, 36, 73, 2, 42, 50,
+            50, 50, 50, 50, 50, 72, 51, 32, 32, 32, 46, 32, 32, 78, 58, 49, 55, 177, 52, 50, 46,
+            51, 48, 87, 148, 80, 72, 71, 52, 203, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52,
+            52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52,
+            52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52,
+            52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52,
+            52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52,
+            0, 0, 0, 0, 0, 0, 0, 6, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52,
+        ];
+        let _packet = AprsPacket::decode_textual(&raw_packet).unwrap();
     }
 }
