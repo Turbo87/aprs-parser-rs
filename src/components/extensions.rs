@@ -54,7 +54,7 @@ pub enum Extension {
     },
     DFStrengthHeightGainDirectivity {
         s_points: u8,
-        antenna_height_feet: u16,
+        antenna_height_feet: u32,
         antenna_gain_db: u8,
         antenna_directivity: Directivity,
     },
@@ -217,7 +217,13 @@ impl Extension {
                                 */
                 let height_code = bytes[4]
                     .checked_sub(48)
-                    .ok_or_else(|| DecodeError::InvalidExtensionDfs(b.to_vec()))?;
+                    .ok_or_else(|| DecodeError::InvalidExtensionDfs(b.to_vec()))?
+                    as u32;
+
+                if !(0..29).contains(&height_code) {
+                    // too big!
+                    return Err(DecodeError::InvalidExtensionDfs(b.to_vec()));
+                }
 
                 let gain_code = (bytes[5] as char)
                     .to_digit(10)
@@ -231,7 +237,7 @@ impl Extension {
 
                 Ok(Self::DFStrengthHeightGainDirectivity {
                     s_points: s_code as u8,
-                    antenna_height_feet: 2u16.pow(height_code as u32) * 10,
+                    antenna_height_feet: 2u32.pow(height_code) * 10,
                     antenna_gain_db: gain_code as u8,
                     antenna_directivity: directivtity,
                 })
@@ -336,6 +342,22 @@ mod test {
             phg,
             Extension::PowerHeightGainDirectivity {
                 power_watts: 25,
+                antenna_height_feet: 2684354560, // wow
+                antenna_gain_db: 3,
+                antenna_directivity: Directivity::DirectionDegrees(90)
+            }
+        ));
+    }
+
+    #[test]
+    fn test_parse_phg_absurd_height3() {
+        let phg = br"DFS8L32";
+
+        let phg = Extension::decode(phg).unwrap();
+        assert!(matches!(
+            phg,
+            Extension::DFStrengthHeightGainDirectivity {
+                s_points: 8,
                 antenna_height_feet: 2684354560, // wow
                 antenna_gain_db: 3,
                 antenna_directivity: Directivity::DirectionDegrees(90)
