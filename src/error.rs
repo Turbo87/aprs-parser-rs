@@ -1,5 +1,6 @@
 use Callsign;
 
+use crate::Extension;
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum DecodeError {
     #[error("Invalid Callsign: {0:?}")]
@@ -28,6 +29,33 @@ pub enum DecodeError {
     InvalidMicEDestination(Callsign),
     #[error("Invalid Mic-E information field: {0:?}")]
     InvalidMicEInformation(Vec<u8>),
+    #[error("Invalid Object name {0:?}")]
+    InvalidObjectName(Vec<u8>),
+    #[error("Invalid Object liveness, expected '*' or '(space)', got '{0:?}'")]
+    InvalidObjectLiveness(char),
+    #[error("Invalid Object format")]
+    InvalidObject,
+    #[error("Invalid Item format")]
+    InvalidItem,
+    #[error("Invalid Item name {0:?}")]
+    InvalidItemName(Vec<u8>),
+    #[error("Invalid Item liveness, expected '!' or '(space)', got '{0:?}'")]
+    InvalidItemLiveness(char),
+    #[error("Invalid Extension data: {0:?}")]
+    InvalidExtension(Vec<u8>),
+
+    #[error("Invalid Extension Range value: {0:?}")]
+    InvalidExtensionRange(Vec<u8>),
+
+    #[error("Invalid Extension Direction/Speed value: {0:?}")]
+    InvalidExtensionDirectionSpeed(Vec<u8>),
+    #[error("Invalid Extension PHG value: {0:?}")]
+    InvalidExtensionPhg(Vec<u8>),
+    #[error("Invalid Extension DFS value: {0:?}")]
+    InvalidExtensionDfs(Vec<u8>),
+
+    #[error("Invalid Extension Area value: {0:?}")]
+    InvalidExtensionArea(Vec<u8>),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -46,4 +74,7 @@ pub enum EncodeError {
     NonGgaAltitude,
     #[error(transparent)]
     Write(#[from] std::io::Error),
+
+    #[error("Invalid Extension value: {0:?}")]
+    InvalidExtension(Extension),
 }
