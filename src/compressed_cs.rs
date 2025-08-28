@@ -150,6 +150,10 @@ impl AprsAltitude {
         Self { altitude_feet }
     }
 
+    pub fn altitude_meters(&self) -> f64 {
+        self.altitude_feet * 0.3048
+    }
+
     pub fn altitude_feet(&self) -> f64 {
         self.altitude_feet
     }

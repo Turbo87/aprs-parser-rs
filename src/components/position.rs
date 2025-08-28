@@ -1,9 +1,12 @@
 use std::{
     io::{Read, Write},
     ops::RangeInclusive,
+    str,
 };
 
 use crate::{AprsCompressedCs, AprsCompressionType, DecodeError, EncodeError};
+
+use AprsAltitude;
 
 use super::lonlat::{Latitude, Longitude, Precision};
 
@@ -25,6 +28,7 @@ pub struct Position {
     pub symbol_table: char,
     pub symbol_code: char,
     pub cst: AprsCst,
+    pub altitude: Option<AprsAltitude>,
 }
 
 impl Position {
@@ -62,6 +66,35 @@ impl Position {
 
         Ok(())
     }
+
+    pub(crate) fn altitude_in_comment(data: &[u8]) -> Option<AprsAltitude> {
+        // Convert to a string slice. 
+        let s = str::from_utf8(data).ok()?;
+
+        // Find the starting index of the "/A=" substring. 
+        let start_index = s.find("/A=")?;
+
+        // Calculate the index where the number begins.
+        let number_start_index = start_index + "/A=".len();
+
+        // Get a slice of the string from that point onward.
+        let rest = &s[number_start_index..];
+
+        // Find the end of the number by searching for the first non-digit character.
+        let number_end_index = rest.find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+
+        // Slice the string to get only the number part.
+        let number_str = &rest[..number_end_index];
+
+        // Parse the number string. If parsing fails, return None.
+        let altitude_value = number_str.parse::<u32>().ok()?;
+
+        // return a new AprsAltitude struct
+        Some(AprsAltitude::new(altitude_value as f64))
+    }
+
+
     /// this function assumes we are getting the head of a byte list
     /// representing a compressed or uncompressed position
     ///
@@ -82,6 +115,9 @@ impl Position {
 
             let symbol_table = b[8] as char;
             let symbol_code = b[18] as char;
+            
+            // search the comment field for an altitude (e.g. '/A=aaaaaa')
+            let altitude = Position::altitude_in_comment(&b[19..]);
 
             Ok((
                 b.get(19..),
@@ -92,6 +128,7 @@ impl Position {
                     symbol_code,
                     symbol_table,
                     cst: AprsCst::Uncompressed,
+                    altitude,
                 },
             ))
         } else {
@@ -123,6 +160,9 @@ impl Position {
                     AprsCst::CompressedSome { cs, t }
                 }
             };
+
+            let altitude = None;
+            
             Ok((
                 b.get(13..),
                 Self {
@@ -132,6 +172,7 @@ impl Position {
                     symbol_code,
                     symbol_table,
                     cst,
+                    altitude,
                 },
             ))
         }

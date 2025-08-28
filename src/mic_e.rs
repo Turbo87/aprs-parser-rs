@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::io::Write;
+//use std::any::type_name;
 
 use Callsign;
 use DecodeError;
@@ -7,6 +8,7 @@ use EncodeError;
 use Latitude;
 use Longitude;
 use Precision;
+use AprsAltitude;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Message {
@@ -144,11 +146,12 @@ pub struct AprsMicE {
     pub message: Message,
     pub speed: Speed,
     pub course: Course,
-    pub symbol_table: u8,
-    pub symbol_code: u8,
+    pub symbol_table: char,
+    pub symbol_code: char,
     pub comment: Vec<u8>,
 
     pub current: bool,
+    pub altitude: Option<AprsAltitude>,
 }
 
 impl AprsMicE {
@@ -156,17 +159,54 @@ impl AprsMicE {
         let (latitude, precision, message, long_offset, long_dir) =
             decode_callsign(&to).ok_or(DecodeError::InvalidMicEDestination(to))?;
 
+        // The 'b' argument actually begins at the 2nd byte within the info field (the caller
+        // strips that first byte off for us).  That first byte is the Data Type ID and denotes 
+        // what type of content the APRS packet contains (e.g. position report, telemetry, Mic-E, etc.). 
         let info = b
             .get(0..8)
             .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
-        let comment = b.get(8..).unwrap_or(&[]).to_vec();
+
+        // the remainder of the packet
+        let rest_of_packet = b.get(8..).unwrap_or(&[]).to_vec();
 
         let longitude = decode_longitude(&info[0..3], long_offset, long_dir)
             .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
         let (speed, course) = decode_speed_and_course(&info[3..6])
             .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
-        let symbol_code = info[6];
-        let symbol_table = info[7];
+        let symbol_code = info[6] as char;
+        let symbol_table = info[7] as char;
+
+        // starting point the "comment" portion of the packet
+        let mut comment_start = 0;
+
+        // the altitude
+        let mut altitude = None;
+
+        // if the rest of the packet (i.e. the information field) is present, then try and decode
+        if rest_of_packet.len() > 2 {
+
+            // most radios insert a manufacturer character at the beginning of the status field.
+            let _radio_manufacturer_char = rest_of_packet[0];  // might want to do something with
+                                                               // this at some point in the future.
+            let starting_status_index = 0;
+
+            // is an altitude embedded within the status field?
+            let (idx, alt) = decode_altitude(&rest_of_packet[starting_status_index..]);
+            comment_start = match idx {
+                Some(i) => i+1, 
+                None => 0,
+            };
+
+            altitude = alt
+        }
+
+        let comment = rest_of_packet[comment_start..].to_vec();
+
+        /*
+        let s = String::from_utf8_lossy(&comment);
+        println!("\nCOMMENT[{}]: {}\n", comment_start, s);
+        */
+        
 
         Ok(Self {
             latitude,
@@ -181,6 +221,7 @@ impl AprsMicE {
             comment,
 
             current,
+            altitude,
         })
     }
 
@@ -194,7 +235,7 @@ impl AprsMicE {
         self.encode_longitude(buf)?;
         self.encode_speed_and_course(buf)?;
 
-        buf.write_all(&[self.symbol_code, self.symbol_table])?;
+        buf.write_all(&[self.symbol_code as u8, self.symbol_table as u8])?;
         buf.write_all(&self.comment)?;
 
         Ok(())
@@ -459,6 +500,47 @@ fn decode_speed_and_course(b: &[u8]) -> Option<(Speed, Course)> {
 
     Some((speed, course))
 }
+
+// find the altitude within the mic-e status or telemetry portion of a packet
+fn decode_altitude(data: &[u8]) -> (Option<usize>, Option<AprsAltitude>) {
+    // sanity check
+    if data.len() < 3 {
+        return (None, None);
+    }
+
+    // find the first position of a '}' character
+    if let Some(idx) = data.iter().position(|&byte| byte == b'}') {
+
+        // only proceed if there are at least 3 characters to the left of the '}'
+        if idx >= 3 {
+
+            let mut alt: i32  = 0;
+            let mut startingidx = 0;
+            if idx - 3 > 0 {
+                startingidx = idx - 3;
+            }
+
+            // loop over each character to the left of the '}'
+            for i in (startingidx..idx).rev() {
+                alt += ((data[i] - 33) as i32) * (91_u32.pow((idx-i-1) as u32) as i32);
+            }
+
+            (Some(idx), Some(AprsAltitude::new((((alt - 10000) as f64) * 3.28084).round())))
+        }
+        else {
+            (None, None)
+        }
+    }
+    else {
+        (None, None)
+    }
+}
+
+/*
+fn type_of<T>(_: T) -> &'static str {
+    type_name::<T>()
+}
+*/
 
 // lat_digit must be an ASCII char to allow for spaces
 fn encode_bits_012(lat_digit: u8, message_bit: MessageBit) -> u8 {
