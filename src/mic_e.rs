@@ -152,6 +152,10 @@ pub struct AprsMicE {
 
     pub current: bool,
     pub altitude: Option<AprsAltitude>,
+    pub radio_mfg: Option<Vec<u8>>,  // some radios, notably Kenwood use a radio identification char
+                                 // between the symbol code and the Mic-e status field.  However, 
+                                 // also using this as a catch-all for any data between the symbol
+                                 // code and any altitude value found.
 }
 
 impl AprsMicE {
@@ -182,18 +186,22 @@ impl AprsMicE {
         // the altitude
         let mut altitude = None;
 
+        // the radio manufacturer character
+        let mut radio_mfg = None;
+
         // if the rest of the packet (i.e. the information field) is present, then try and decode
         if rest_of_packet.len() > 2 {
 
-            // most radios insert a manufacturer character at the beginning of the status field.
-            let _radio_manufacturer_char = rest_of_packet[0];  // might want to do something with
-                                                               // this at some point in the future.
-            let starting_status_index = 0;
-
             // is an altitude embedded within the status field?
-            let (idx, alt) = decode_altitude(&rest_of_packet[starting_status_index..]);
+            let (idx, alt) = decode_altitude(&rest_of_packet[0..]);
             comment_start = match idx {
-                Some(i) => i+1, 
+                Some(i) => {
+                    if i > 3 {
+                        // some radios insert a manufacturer character at the beginning of the status field (e.g kenwood).
+                        radio_mfg = Some(rest_of_packet[0..i-3].to_vec());
+                    }
+                    i+1
+                },
                 None => 0,
             };
 
@@ -201,12 +209,6 @@ impl AprsMicE {
         }
 
         let comment = rest_of_packet[comment_start..].to_vec();
-
-        /*
-        let s = String::from_utf8_lossy(&comment);
-        println!("\nCOMMENT[{}]: {}\n", comment_start, s);
-        */
-        
 
         Ok(Self {
             latitude,
@@ -222,6 +224,7 @@ impl AprsMicE {
 
             current,
             altitude,
+            radio_mfg,
         })
     }
 
@@ -236,6 +239,18 @@ impl AprsMicE {
         self.encode_speed_and_course(buf)?;
 
         buf.write_all(&[self.symbol_code as u8, self.symbol_table as u8])?;
+
+        // encode any radio manufacturer identification character(s)
+        if let Some(mfg) = &self.radio_mfg {
+            buf.write_all(mfg)?;
+        }
+
+        // if there is an altitude defined then encode that
+        if let Some(_a) = self.altitude {
+            self.encode_altitude(buf)?;
+        }
+
+        // the comment for the APRS packet
         buf.write_all(&self.comment)?;
 
         Ok(())
@@ -322,10 +337,50 @@ impl AprsMicE {
             0..=19 => tens_knots + 80,
             _ => tens_knots,
         };
+
         let dc: u8 = (units_knots * 10 + hundreds_course + 4).try_into().unwrap();
         let se: u8 = (units_course).try_into().unwrap();
 
         w.write_all(&[sp + 28, dc + 28, se + 28])?;
+
+        Ok(())
+    }
+
+    fn encode_altitude<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
+
+        // if there's an altitude value present
+        if let Some(a) = self.altitude {
+
+            // the altitude in meters +10000 and rounded to the nearest integer.
+            let mut dividend = (a.altitude_meters() + 10000.0).round() as u32;
+
+            // the buffer to store the list of u8 encoded values
+            let mut b = vec![];
+
+            // loop counter.
+            let mut i: i32 = 2;
+
+            while i >= 0 {
+                let divsor = 91_u32.pow(i as u32);
+                let quotient = dividend / divsor;
+                let amount = quotient * divsor;
+
+                // the quotient + 33 results in an ascii char for the encoding
+                let c = quotient + 33;
+
+                // add the character to the vector
+                b.push(c as u8);
+
+                // decrement the dividend
+                dividend -= amount;
+                
+                // decrement the loop index and continue
+                i -= 1;
+            }
+
+            b.push(b'}');
+            w.write_all(&b)?;
+        }
 
         Ok(())
     }
@@ -656,14 +711,17 @@ mod tests {
             AprsMicE {
                 latitude: Latitude::new(0.0).unwrap(),
                 longitude: Longitude::new(-112.12899999999999).unwrap(),
+                //longitude: Longitude::new(-105.07733333333333).unwrap(),
                 precision: Precision::HundredthMinute,
                 message: Message::M0,
                 speed: Speed::new(20).unwrap(),
                 course: Course::new(251).unwrap(),
-                symbol_table: b'/',
-                symbol_code: b'j',
+                symbol_table: '/',
+                symbol_code: 'j',
                 comment: b"Hello world!".to_vec(),
-                current: true
+                current: true,
+                altitude: None,
+                radio_mfg: None,
             },
             data
         );

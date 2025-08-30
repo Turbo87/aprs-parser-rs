@@ -161,8 +161,15 @@ impl Position {
                 }
             };
 
-            let altitude = None;
-            
+            // get the altitude value
+            let altitude: Option<AprsAltitude> = match cst {
+                AprsCst::CompressedSome{cs, ..} => match cs {
+                    AprsCompressedCs::Altitude(a) => Some(a),
+                    _ => None,
+                },
+                _ => None,
+            };
+
             Ok((
                 b.get(13..),
                 Self {

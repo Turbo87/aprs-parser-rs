@@ -267,6 +267,7 @@ mod tests {
     use Precision;
     use QConstruct;
     use Timestamp;
+    use AprsAltitude;
 
     #[test]
     fn parse() {
@@ -400,10 +401,12 @@ mod tests {
                     message: Message::M1,
                     speed: Speed::new(64).unwrap(),
                     course: Course::new(35).unwrap(),
-                    symbol_table: b'/',
-                    symbol_code: b'>',
-                    comment: br#">"4z}="#.to_vec(),
-                    current: true
+                    symbol_table: '/',
+                    symbol_code: '>',
+                    comment: br#"="#.to_vec(),
+                    current: true,
+                    altitude: Some(AprsAltitude::new(325.0)),
+                    radio_mfg: Some(br#">"#.to_vec()),
                 })
             },
             result
@@ -426,8 +429,9 @@ mod tests {
                     symbol_table: '/',
                     symbol_code: 'c',
                     cst: AprsCst::Uncompressed,
+                    altitude: None,
                 },
-
+                extension: None,
                 comment: b"Hello world".to_vec(),
             }),
         };
@@ -456,7 +460,9 @@ mod tests {
                     symbol_table: '/',
                     symbol_code: 'c',
                     cst: AprsCst::Uncompressed,
+                    altitude: None,
                 },
+                extension: None,
                 comment: b"Hello world".to_vec(),
             }),
         };
@@ -481,8 +487,11 @@ mod tests {
             r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
-            "VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q\x1cl|ok/'\"4<}Nick - Monitoring IRG|!\"&7'M|!wTD!|3",
-            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
+            r#"WN6OTL>T0PYTU,W0UPS-15,WIDE1,NCFPD,WIDE2:`pUbl!X>/'"D7}|!G%G'g|!w6D!|3"#,
+            r#"N0JME>T0RVQP,W0UPS-15,WIDE1,NCFPD,WIDE2:`pF}l"b>/'"CQ}MT-RTG|&K%L'b|!wd'!|3"#,
+            r#"K1DDN-9>S8TXRT,BADGR,NCFPD,WIDE2:`qDEmA5k/]"U[}CQ FIELD DAY="#,
+            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Ql|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9grH?>/>"4z}="#,
         ];
 
         for v in valids {
@@ -505,8 +514,8 @@ mod tests {
             r"IC17F2>APRS,qAS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,qAS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,qAS,DL4MEA:>184050hAlso with HMS format...",
-            "VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Q\x1cl|ok/'\"4<}Nick - Monitoring IRG|!\"&7'M|!wTD!|3",
-            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
+            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,qAR,VE9QLE-10:`]Ql|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,qAU,DB0KOE-1:`|9grH?>/>\"4z}="#,
             // 0 to 8 via callsigns
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
             r"ICA3F2>APRS,qAS:>184050hAlso with HMS format...",
@@ -531,8 +540,8 @@ mod tests {
             r"IC17F2>APRS,DL4MEA::DESTINATI:Hello World! This msg has a : colon ",
             r"ICA7F2>APRS,DL4MEA:>312359zStatus seems okay!",
             r"ICA3F2>APRS,DL4MEA:>184050hAlso with HMS format...",
-            "VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,VE9QLE-10:`]Q\x1cl|ok/'\"4<}Nick - Monitoring IRG|!\"&7'M|!wTD!|3",
-            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,DB0KOE-1:`|9g\"H?>/>\"4z}="#,
+            r#"VE9MP-12>T5RX8P,VE9GFI-2,WIDE1*,WIDE2-1,VE9QLE-10:`]Ql|ok/'"4<}Nick - Monitoring IRG|!"&7'M|!wTD!|3"#,
+            r#"DF1CHB-9>UQ0RT6,ARISS,APRSAT,WIDE1-1,DB0KOE-1:`|9grH?>/>\"4z}="#,
             // 0 to 8 via callsigns
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
             r"ICA3F2>APRS:>184050hAlso with HMS format...",
