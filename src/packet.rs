@@ -207,7 +207,7 @@ impl AprsData {
         }
     }
 
-    fn dest_field(&self) -> Cow<Callsign> {
+    fn dest_field(&self) -> Cow<'_, Callsign> {
         match self {
             AprsData::Position(p) => Cow::Borrowed(&p.to),
             AprsData::Message(m) => Cow::Borrowed(&m.to),
