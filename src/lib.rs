@@ -8,7 +8,7 @@
 //! ```rust
 //! extern crate aprs_parser;
 //!
-//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, Callsign, Latitude, Longitude, Precision, Timestamp, Via, QConstruct, Position};
+//! use aprs_parser::{AprsCst, AprsData, AprsPacket, AprsPosition, AprsAltitude, Callsign, Latitude, Longitude, Precision, Timestamp, Via, QConstruct, Position, Extension::DirectionSpeed};
 //!
 //! fn main() {
 //!     let result = AprsPacket::decode_textual(
@@ -42,8 +42,10 @@
 //!                             symbol_table: '\\',
 //!                             symbol_code: '^',
 //!                             cst: AprsCst::Uncompressed,
+//!                             altitude: Some(AprsAltitude::new(3054.0)),
 //!                         },
 //!                         comment: b"322/103/A=003054".to_vec(),
+//!                         extension: Some(DirectionSpeed { direction_degrees: 322, speed_knots: 3 }),
 //!                     }
 //!                 )
 //!             }

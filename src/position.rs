@@ -5,6 +5,7 @@ use Callsign;
 use DecodeError;
 use EncodeError;
 use Timestamp;
+use Extension;
 
 use Position;
 
@@ -13,13 +14,11 @@ use AprsCst;
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPosition {
     pub to: Callsign,
-
     pub timestamp: Option<Timestamp>,
     pub messaging_supported: bool,
-
     pub position: Position,
-
     pub comment: Vec<u8>,
+    pub extension: Option<Extension>,
 }
 
 impl AprsPosition {
@@ -45,8 +44,12 @@ impl AprsPosition {
 
         // decode the position and symbol data
         let (remaining_buffer, position) = Position::decode(b)?;
+
         // comment is entire rest of buffer, blank comment if not provided
         let comment = remaining_buffer.unwrap_or_default().to_vec();
+
+        // try and parse comment field for an extension
+        let extension = Extension::decode(&comment).ok();
 
         Ok(Self {
             to,
@@ -54,8 +57,10 @@ impl AprsPosition {
             messaging_supported,
             position,
             comment,
+            extension,
         })
     }
+
 
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let sym = match (self.timestamp.is_some(), self.messaging_supported) {
