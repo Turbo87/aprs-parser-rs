@@ -12,7 +12,7 @@ exclude = [".gitignore", ".travis.yml"]
 rust-version = "1.60.0"
 
 [dependencies]
-thiserror = "1.0.59"
+thiserror = "2.0.0"
 
 [dev-dependencies]
 approx = "0.5.1"
